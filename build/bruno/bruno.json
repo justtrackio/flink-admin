@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "flink-admin",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

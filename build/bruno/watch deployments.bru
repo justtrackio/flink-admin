@@ -1,0 +1,15 @@
+meta {
+  name: watch deployments
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://localhost:8082/api/deployments/watch
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
