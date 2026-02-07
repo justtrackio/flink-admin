@@ -122,6 +122,7 @@ type FlinkClusterInfo struct {
 type FlinkJobStatus struct {
 	CheckpointInfo *FlinkCheckpointInfo `json:"checkpointInfo,omitempty"`
 	SavepointInfo  *FlinkSavepointInfo  `json:"savepointInfo,omitempty"`
+	JobId          string               `json:"jobId,omitempty"`
 	State          string               `json:"state,omitempty"`
 	StartTime      string               `json:"startTime,omitempty"`
 	UpdateTime     string               `json:"updateTime,omitempty"`
@@ -141,26 +142,6 @@ type FlinkDeploymentList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []FlinkDeployment `json:"items"`
-}
-
-// NewFlinkDeployment creates a FlinkDeployment with APIVersion and Kind preset.
-func NewFlinkDeployment() *FlinkDeployment {
-	return &FlinkDeployment{
-		TypeMeta: metav1.TypeMeta{APIVersion: "flink.apache.org/v1beta1", Kind: "FlinkDeployment"},
-	}
-}
-
-// ToUnstructured converts the typed resource to *unstructured.Unstructured for use with dynamic clients.
-func (fd *FlinkDeployment) ToUnstructured() (*unstructured.Unstructured, error) {
-	data, err := json.Marshal(fd)
-	if err != nil {
-		return nil, err
-	}
-	obj := &unstructured.Unstructured{}
-	if err = obj.UnmarshalJSON(data); err != nil {
-		return nil, err
-	}
-	return obj, nil
 }
 
 func FromUnstructured(val any) (*FlinkDeployment, error) {

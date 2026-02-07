@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/justtrackio/gosoline/pkg/appctx"
 	"github.com/justtrackio/gosoline/pkg/cfg"
-	"github.com/justtrackio/gosoline/pkg/clock"
 	"github.com/justtrackio/gosoline/pkg/coffin"
 	"github.com/justtrackio/gosoline/pkg/kernel"
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -51,7 +49,7 @@ func (m *DeploymentWatcherModule) Watch() (map[string]map[string]*FlinkDeploymen
 	defer m.lck.Unlock()
 
 	id := uuid.New().NewV4()
-	ch := make(chan DeploymentEvent)
+	ch := make(chan DeploymentEvent, 16)
 	m.logger.Info(context.Background(), "adding new watcher with id %s", id)
 	m.channels[id] = ch
 	stop := make(chan bool)
@@ -67,29 +65,33 @@ func (m *DeploymentWatcherModule) Watch() (map[string]map[string]*FlinkDeploymen
 	return m.deployments, ch, stop
 }
 
+// GetDeployment retrieves a single deployment from the in-memory cache by namespace and name
+func (m *DeploymentWatcherModule) GetDeployment(namespace, name string) (*FlinkDeployment, bool) {
+	m.lck.Lock()
+	defer m.lck.Unlock()
+
+	var ok bool
+	var nsDeployments map[string]*FlinkDeployment
+
+	if nsDeployments, ok = m.deployments[namespace]; !ok {
+		return nil, false
+	}
+
+	deployment, exists := nsDeployments[name]
+
+	return deployment, exists
+}
+
 func (m *DeploymentWatcherModule) Run(ctx context.Context) error {
 	m.logger.Info(ctx, "starting deployment watcher")
 
-	cfn, cfnCtx := coffin.WithContext(context.Background())
+	cfn, cfnCtx := coffin.WithContext(ctx)
 
 	cfn.GoWithContext(ctx, func(ctx context.Context) error {
 		<-ctx.Done()
 		m.watcher.Stop()
 
 		return nil
-	})
-
-	cfn.GoWithContext(ctx, func(ctx context.Context) error {
-		timer := clock.NewRealTicker(time.Second * 5)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-timer.Chan():
-				m.logger.Info(ctx, "serving %d watchers", len(m.channels))
-			}
-		}
 	})
 
 	for _, namespace := range []string{"annotators"} {
@@ -121,7 +123,11 @@ func (m *DeploymentWatcherModule) Run(ctx context.Context) error {
 
 				m.lck.Lock()
 				for _, ch := range m.channels {
-					ch <- event
+					select {
+					case ch <- event:
+					default:
+						// subscriber is not keeping up or dead — skip
+					}
 				}
 				m.lck.Unlock()
 			}

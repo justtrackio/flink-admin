@@ -13,26 +13,19 @@ import (
 
 func NewHandlerDeployments(ctx context.Context, config cfg.Config, logger log.Logger) (*HandlerDeployments, error) {
 	var err error
-	var k8sService *K8sService
 	var watcher *DeploymentWatcherModule
-
-	if k8sService, err = ProvideK8sService(ctx, config, logger); err != nil {
-		return nil, err
-	}
 
 	if watcher, err = ProvideDeploymentWatcherModule(ctx, config, logger); err != nil {
 		return nil, fmt.Errorf("could not initialize deployment watcher: %w", err)
 	}
 
 	return &HandlerDeployments{
-		k8sService: k8sService,
-		watcher:    watcher,
+		watcher: watcher,
 	}, nil
 }
 
 type HandlerDeployments struct {
-	k8sService *K8sService
-	watcher    *DeploymentWatcherModule
+	watcher *DeploymentWatcherModule
 }
 
 func (h *HandlerDeployments) WatchDeployments(ctx context.Context, writer *httpserver.SseWriter) error {

@@ -60,6 +60,7 @@ export interface FlinkJobStatus {
   state: string;
   startTime?: string;
   updateTime?: string;
+  jobId?: string;
   checkpointInfo?: FlinkCheckpointInfo;
   savepointInfo?: FlinkSavepointInfo;
 }
@@ -84,4 +85,61 @@ export type DeploymentEventType = 'ADDED' | 'MODIFIED' | 'DELETED';
 export interface DeploymentEvent {
   type: DeploymentEventType;
   deployment: FlinkDeployment;
+}
+
+// Flink REST API Checkpoint Types
+
+export interface FlinkCheckpointCounts {
+  restored: number;
+  total: number;
+  in_progress: number;
+  completed: number;
+  failed: number;
+}
+
+export interface FlinkCheckpointSummaryStats {
+  min: number;
+  max: number;
+  avg: number;
+}
+
+export interface FlinkCheckpointSummary {
+  state_size: FlinkCheckpointSummaryStats;
+  end_to_end_duration: FlinkCheckpointSummaryStats;
+  alignment_buffered: FlinkCheckpointSummaryStats;
+  processed_data: FlinkCheckpointSummaryStats;
+  persisted_data: FlinkCheckpointSummaryStats;
+}
+
+export interface FlinkCheckpointDetail {
+  id: number;
+  status: string;
+  is_savepoint: boolean;
+  trigger_timestamp: number;
+  latest_ack_timestamp: number;
+  state_size: number;
+  end_to_end_duration: number;
+  alignment_buffered: number;
+  processed_data: number;
+  persisted_data: number;
+  num_subtasks: number;
+  num_acknowledged_subtasks: number;
+  checkpoint_type: string;
+  external_path: string;
+  discarded: boolean;
+}
+
+export interface FlinkRestoredCheckpoint {
+  id: number;
+  restore_timestamp: number;
+  is_savepoint: boolean;
+  external_path: string;
+}
+
+export interface FlinkCheckpointStatistics {
+  counts: FlinkCheckpointCounts;
+  summary: FlinkCheckpointSummary;
+  latest: FlinkCheckpointDetail | null;
+  history: FlinkCheckpointDetail[];
+  restored: FlinkRestoredCheckpoint | null;
 }

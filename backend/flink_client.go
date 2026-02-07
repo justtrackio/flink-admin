@@ -33,62 +33,13 @@ type FlinkClient struct {
 	logger     log.Logger
 }
 
-// GetOverview fetches the cluster overview from /overview endpoint
-func (c *FlinkClient) GetOverview(ctx context.Context, clusterURL string) (*FlinkOverview, error) {
-	var overview FlinkOverview
-	if err := c.get(ctx, clusterURL+"/overview", &overview); err != nil {
-		return nil, fmt.Errorf("could not get overview: %w", err)
+// GetCheckpoints fetches checkpoint statistics from /jobs/:jobid/checkpoints endpoint
+func (c *FlinkClient) GetCheckpoints(ctx context.Context, clusterURL string, jobID string) (*FlinkCheckpointStatistics, error) {
+	var stats FlinkCheckpointStatistics
+	if err := c.get(ctx, clusterURL+"/jobs/"+jobID+"/checkpoints", &stats); err != nil {
+		return nil, fmt.Errorf("could not get checkpoints: %w", err)
 	}
-	return &overview, nil
-}
-
-// GetConfig fetches the cluster configuration from /config endpoint
-func (c *FlinkClient) GetConfig(ctx context.Context, clusterURL string) (*FlinkConfig, error) {
-	var config FlinkConfig
-	if err := c.get(ctx, clusterURL+"/config", &config); err != nil {
-		return nil, fmt.Errorf("could not get config: %w", err)
-	}
-	return &config, nil
-}
-
-// ListJobs fetches all jobs from /jobs endpoint
-func (c *FlinkClient) ListJobs(ctx context.Context, clusterURL string) ([]FlinkJob, error) {
-	var response FlinkJobsResponse
-	if err := c.get(ctx, clusterURL+"/jobs", &response); err != nil {
-		return nil, fmt.Errorf("could not list jobs: %w", err)
-	}
-	return response.Jobs, nil
-}
-
-// GetJobDetail fetches detailed job information from /jobs/:jobid endpoint
-func (c *FlinkClient) GetJobDetail(ctx context.Context, clusterURL string, jobID string) (*FlinkJobDetail, error) {
-	var detail FlinkJobDetail
-	if err := c.get(ctx, clusterURL+"/jobs/"+jobID, &detail); err != nil {
-		return nil, fmt.Errorf("could not get job detail: %w", err)
-	}
-	return &detail, nil
-}
-
-// CancelJob cancels a running job via PATCH /jobs/:jobid?mode=cancel
-func (c *FlinkClient) CancelJob(ctx context.Context, clusterURL string, jobID string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, clusterURL+"/jobs/"+jobID+"?mode=cancel", nil)
-	if err != nil {
-		return fmt.Errorf("could not create cancel request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("could not execute cancel request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("cancel job failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	c.logger.Info(ctx, "job %s cancel request sent", jobID)
-	return nil
+	return &stats, nil
 }
 
 // get is a helper method for GET requests with JSON response

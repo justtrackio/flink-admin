@@ -38,11 +38,9 @@ func main() {
 				r.GET("/watch", httpserver.BindSseN(handler.WatchDeployments))
 			}))
 
-			//router.Group("/api/namespaces/:namespace/clusters/:cluster/jobs").HandleWith(httpserver.With(NewHandlerJobs, func(r *httpserver.Router, handler *HandlerJobs) {
-			//	r.GET("", httpserver.Bind(handler.ListJobs))
-			//	r.GET("/:jobId", httpserver.Bind(handler.GetJob))
-			//	r.DELETE("/:jobId", httpserver.Bind(handler.CancelJob))
-			//}))
+			router.Group("/api/deployments/:namespace/:name").HandleWith(httpserver.With(NewHandlerCheckpoints, func(r *httpserver.Router, handler *HandlerCheckpoints) {
+				r.GET("/checkpoints", httpserver.Bind(handler.GetCheckpoints))
+			}))
 
 			return nil
 		})),
