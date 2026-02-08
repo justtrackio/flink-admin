@@ -3,10 +3,10 @@ module github.com/justtrackio/flink-admin
 go 1.25.0
 
 require (
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.61.2
 	github.com/gin-contrib/cors v1.7.3
 	github.com/gosoline-project/httpserver v0.1.1-0.20260207210814-b6b2ed50ec91
 	github.com/justtrackio/gosoline v0.54.8
-	k8s.io/api v0.35.0
 	k8s.io/apimachinery v0.35.0
 	k8s.io/client-go v0.35.0
 )
@@ -43,7 +43,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.19 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/kinesis v1.29.7 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.61.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sns v1.31.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.34.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.22.7 // indirect
@@ -216,6 +215,7 @@ require (
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	k8s.io/api v0.35.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect

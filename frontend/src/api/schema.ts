@@ -143,3 +143,21 @@ export interface FlinkCheckpointStatistics {
   history: FlinkCheckpointDetail[];
   restored: FlinkRestoredCheckpoint | null;
 }
+
+// S3 Storage Checkpoint Types
+
+export interface StorageEntry {
+  name: string;
+  path: string;
+  jobId?: string;
+  lastModified?: string;
+  size?: number;
+}
+
+export interface StorageCheckpointsResponse {
+  jobId?: string;
+  checkpointDir?: string;
+  savepointDir?: string;
+  checkpoints: StorageEntry[];
+  savepoints: StorageEntry[];
+}

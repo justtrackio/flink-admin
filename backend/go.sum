@@ -310,8 +310,6 @@ github.com/google/uuid v1.0.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+
 github.com/google/uuid v1.1.2/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-github.com/gosoline-project/httpserver v0.1.1-0.20260207202850-de2a23d681cb h1:X8kkzukZpYrcfkCd4erSPB/jW7yo9VHd8JU/hNNpk3s=
-github.com/gosoline-project/httpserver v0.1.1-0.20260207202850-de2a23d681cb/go.mod h1:Z+NxTCPbGBX+ksVRXLDFuOMQCPFW+fuzw9siTzvydaw=
 github.com/gosoline-project/httpserver v0.1.1-0.20260207210814-b6b2ed50ec91 h1:vrBXFVCVi/d9wLbiERXYFaVPPbs/57HdJXOfWxHmEk8=
 github.com/gosoline-project/httpserver v0.1.1-0.20260207210814-b6b2ed50ec91/go.mod h1:Z+NxTCPbGBX+ksVRXLDFuOMQCPFW+fuzw9siTzvydaw=
 github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 h1:+9834+KizmvFV7pXQGSXQTsaWhq2GjuNUt0aUU0YBYw=
