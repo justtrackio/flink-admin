@@ -72,12 +72,13 @@ function parseSSEEvent(block: string): SSEEvent | null {
       case 'id':
         event.id = value;
         break;
-      case 'retry':
+      case 'retry': {
         const retryMs = parseInt(value, 10);
         if (!isNaN(retryMs)) {
           event.retry = retryMs;
         }
         break;
+      }
     }
   }
 
@@ -99,6 +100,7 @@ export function useDeploymentStream(): DeploymentStreamState {
   const heartbeatCheckTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const backoffRef = useRef(MIN_BACKOFF_MS);
   const lastActivityRef = useRef<number>(Date.now());
+  const connectRef = useRef<() => void>(() => undefined);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -121,7 +123,7 @@ export function useDeploymentStream(): DeploymentStreamState {
     console.log(`Scheduling reconnect in ${delay}ms`);
     
     reconnectTimerRef.current = setTimeout(() => {
-      connect();
+      connectRef.current();
     }, delay);
     
     // Exponential backoff with max cap
@@ -282,6 +284,10 @@ export function useDeploymentStream(): DeploymentStreamState {
       }
     })();
   }, [clearReconnectTimer, clearHeartbeatCheckTimer, scheduleReconnect]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   const retry = useCallback(() => {
     console.log('Manual retry triggered');

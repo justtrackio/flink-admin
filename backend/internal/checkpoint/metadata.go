@@ -104,25 +104,43 @@ func ParseSummary(reader io.Reader, options ParseOptions) (*CheckpointSummary, e
 }
 
 // ParseFile opens the given file path and parses it as _metadata.
-func ParseFile(path string, options ParseOptions) (*CheckpointMetadata, error) {
+func ParseFile(path string, options ParseOptions) (metadata *CheckpointMetadata, err error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open metadata file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close metadata file: %w", cerr)
+		}
+	}()
 
-	return Parse(file, options)
+	metadata, err = Parse(file, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return metadata, nil
 }
 
 // ParseFileSummary opens the given file path and parses it as a summary.
-func ParseFileSummary(path string, options ParseOptions) (*CheckpointSummary, error) {
+func ParseFileSummary(path string, options ParseOptions) (summary *CheckpointSummary, err error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open metadata file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close metadata file: %w", cerr)
+		}
+	}()
 
-	return ParseSummary(file, options)
+	summary, err = ParseSummary(file, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return summary, nil
 }
 
 // readMasterStates parses master state entries from the stream.
@@ -350,6 +368,7 @@ func readOptionalOperatorStateHandle(br *binaryReader, parseFull bool) (*Operato
 	if err != nil {
 		return nil, err
 	}
+
 	return handle, nil
 }
 
@@ -360,5 +379,6 @@ func buildOperatorID(low int64, high int64) [16]byte {
 		id[i] = byte(high >> uint(56-8*i))
 		id[i+8] = byte(low >> uint(56-8*i))
 	}
+
 	return id
 }

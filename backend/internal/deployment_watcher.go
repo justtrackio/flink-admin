@@ -37,6 +37,7 @@ type DeploymentWatcher struct {
 func (s *DeploymentWatcher) Watch(ctx context.Context, namespaces []string) error {
 	if len(namespaces) == 0 {
 		close(s.resultChan)
+
 		return nil
 	}
 
@@ -63,7 +64,7 @@ func (s *DeploymentWatcher) watchNamespace(ctx context.Context, namespace string
 			return fmt.Errorf("could not watch deployments: %w", err)
 		}
 
-		if err = s.processEvents(ctx, watcher); err != nil {
+		if err := s.processEvents(ctx, watcher); err != nil {
 			return err
 		}
 	}

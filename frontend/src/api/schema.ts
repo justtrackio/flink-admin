@@ -31,10 +31,17 @@ export interface FlinkDeploymentTaskManager {
   resource: FlinkDeploymentResource;
 }
 
+export interface FlinkDeploymentIngress {
+  annotations?: Record<string, string>;
+  className?: string;
+  template?: string;
+}
+
 export interface FlinkDeploymentSpec {
   image: string;
   flinkVersion: string;
   flinkConfiguration?: Record<string, string>;
+  ingress?: FlinkDeploymentIngress;
   job: FlinkDeploymentJob;
   jobManager: FlinkDeploymentJobManager;
   taskManager: FlinkDeploymentTaskManager;

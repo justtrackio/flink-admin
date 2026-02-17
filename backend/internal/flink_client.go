@@ -39,12 +39,13 @@ func (c *FlinkClient) GetCheckpoints(ctx context.Context, clusterURL string, job
 	if err := c.get(ctx, clusterURL+"/jobs/"+jobID+"/checkpoints", &stats); err != nil {
 		return nil, fmt.Errorf("could not get checkpoints: %w", err)
 	}
+
 	return &stats, nil
 }
 
 // get is a helper method for GET requests with JSON response
-func (c *FlinkClient) get(ctx context.Context, url string, target any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func (c *FlinkClient) get(ctx context.Context, url string, target any) (err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("could not create request: %w", err)
 	}
@@ -55,10 +56,18 @@ func (c *FlinkClient) get(ctx context.Context, url string, target any) error {
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close response body: %w", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("read error response body: %w", readErr)
+		}
+
 		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 

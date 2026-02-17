@@ -32,16 +32,15 @@ func (h *HandlerDeployments) WatchDeployments(ctx context.Context, writer *https
 	deployments, updates, stop := h.watcher.Watch(ctx)
 	defer close(stop)
 
-	var err error
-	var data []byte
 	firstEvent := true
-
-	// Helper function to create event ID from deployment metadata
-	makeEventId := func(deployment *FlinkDeployment) string {
-		return fmt.Sprintf("%s-%s", deployment.ObjectMeta.UID, deployment.ObjectMeta.ResourceVersion)
+	if err := sendInitialDeployments(writer, deployments, &firstEvent); err != nil {
+		return err
 	}
 
-	// Send initial deployments
+	return streamDeploymentUpdates(ctx, writer, updates)
+}
+
+func sendInitialDeployments(writer *httpserver.SseWriter, deployments map[string]map[string]*FlinkDeployment, firstEvent *bool) error {
 	for _, nsDeployments := range deployments {
 		for _, deployment := range nsDeployments {
 			event := DeploymentEvent{
@@ -49,19 +48,20 @@ func (h *HandlerDeployments) WatchDeployments(ctx context.Context, writer *https
 				Deployment: deployment,
 			}
 
-			if data, err = json.Marshal(event); err != nil {
+			data, err := json.Marshal(event)
+			if err != nil {
 				return fmt.Errorf("could not marshal deployment: %w", err)
 			}
 
 			sseEvent := httpserver.SseEvent{
 				Data: string(data),
-				Id:   makeEventId(deployment),
+				Id:   makeDeploymentEventID(deployment),
 			}
 
 			// Set retry only on first event (tells browser to wait 5s before reconnecting)
-			if firstEvent {
+			if *firstEvent {
 				sseEvent.Retry = 5000
-				firstEvent = false
+				*firstEvent = false
 			}
 
 			if err := writer.SendEvent(sseEvent); err != nil {
@@ -70,7 +70,10 @@ func (h *HandlerDeployments) WatchDeployments(ctx context.Context, writer *https
 		}
 	}
 
-	// Stream updates
+	return nil
+}
+
+func streamDeploymentUpdates(ctx context.Context, writer *httpserver.SseWriter, updates <-chan DeploymentEvent) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -79,13 +82,14 @@ func (h *HandlerDeployments) WatchDeployments(ctx context.Context, writer *https
 			if !ok {
 				return nil // channel closed, watcher is shutting down
 			}
-			if data, err = json.Marshal(update); err != nil {
+			data, err := json.Marshal(update)
+			if err != nil {
 				return fmt.Errorf("could not marshal deployment update: %w", err)
 			}
 
 			sseEvent := httpserver.SseEvent{
 				Data: string(data),
-				Id:   makeEventId(update.Deployment),
+				Id:   makeDeploymentEventID(update.Deployment),
 			}
 
 			if err := writer.SendEvent(sseEvent); err != nil {
@@ -93,4 +97,8 @@ func (h *HandlerDeployments) WatchDeployments(ctx context.Context, writer *https
 			}
 		}
 	}
+}
+
+func makeDeploymentEventID(deployment *FlinkDeployment) string {
+	return fmt.Sprintf("%s-%s", deployment.UID, deployment.ResourceVersion)
 }

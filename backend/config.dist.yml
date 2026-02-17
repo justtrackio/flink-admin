@@ -1,0 +1,43 @@
+env: "sandbox"
+
+app_project: "justtrack"
+app_family: "gosoline"
+app_group: "flink"
+app_name: "admin"
+
+aws:
+  account_id: "047452524847"
+  organizational_unit: "sdlc"
+
+cloud:
+  aws:
+    defaults:
+      endpoint: ""
+      profile: "{aws.organizational_unit}-marketing"
+    s3:
+      clients:
+        default:
+          region: eu-central-1
+
+flink:
+  namespaces:
+    - annotators
+    - denormalizers
+    - lake-ingesters
+    - parquetizers
+    - session-tracker
+
+httpserver:
+  default:
+    port: 8082
+    timeout:
+      read: 60s
+      write: 60s
+      idle: 60s
+    compression:
+      exclude:
+        path:
+          - /api/deployments/watch
+
+kube:
+  context: "arn:aws:eks:eu-central-1:{aws.account_id}:cluster/{aws.organizational_unit}-marketing"

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useDeploymentStreamContext } from '../context/DeploymentStreamContext';
+import { useDeploymentStreamContext } from '../context/useDeploymentStreamContext';
 import type { FlinkDeployment } from '../api/schema';
 
 /**

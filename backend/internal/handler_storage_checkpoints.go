@@ -60,74 +60,96 @@ func (h *HandlerStorageCheckpoints) GetStorageCheckpoints(ctx context.Context, r
 		Savepoints:  []StorageEntry{},
 	}
 
-	// Get checkpoint directory from flinkConfiguration
-	var checkpointBaseDir string
-	if deployment.Spec.FlinkConfiguration != nil {
-		if checkpointDir, ok := deployment.Spec.FlinkConfiguration["execution.checkpointing.dir"]; ok {
-			if checkpointDirStr, ok := checkpointDir.(string); ok && checkpointDirStr != "" {
-				checkpointBaseDir = checkpointDirStr
-				response.CheckpointDir = checkpointDirStr
+	flinkConfig := deployment.Spec.FlinkConfiguration
+	if flinkConfig == nil {
+		h.logger.Info(ctx, "returning %d checkpoints and %d savepoints for %s/%s",
+			len(response.Checkpoints), len(response.Savepoints), request.Namespace, request.Name)
 
-				h.logger.Info(ctx, "scanning for checkpoints in all job IDs under %s", checkpointBaseDir)
+		return httpserver.NewJsonResponse(response), nil
+	}
 
-				// List all job ID directories
-				jobIds, err := h.s3Service.ListJobDirectories(ctx, checkpointBaseDir)
-				if err != nil {
-					h.logger.Warn(ctx, "failed to list job directories: %v", err)
-				} else {
-					h.logger.Info(ctx, "found %d job directories to scan", len(jobIds))
-
-					// For each job ID, list valid checkpoints
-					for _, jobId := range jobIds {
-						checkpoints, err := h.s3Service.ListValidCheckpoints(ctx, checkpointBaseDir, jobId)
-						if err != nil {
-							h.logger.Warn(ctx, "failed to list checkpoints for job %s: %v", jobId, err)
-							continue
-						}
-						response.Checkpoints = append(response.Checkpoints, checkpoints...)
-					}
-				}
-			}
+	if checkpointBaseDir, ok := getStringConfig(flinkConfig, "execution.checkpointing.dir"); ok {
+		response.CheckpointDir = checkpointBaseDir
+		h.logger.Info(ctx, "scanning for checkpoints in all job IDs under %s", checkpointBaseDir)
+		if err := h.populateCheckpoints(ctx, checkpointBaseDir, &response); err != nil {
+			h.logger.Warn(ctx, "failed to list job directories: %v", err)
 		}
+	}
 
-		// Get current job ID for display purposes
-		jobId := deployment.Status.JobStatus.JobId
-		if jobId != "" {
-			response.JobId = jobId
-		}
+	jobId := deployment.Status.JobStatus.JobId
+	if jobId != "" {
+		response.JobId = jobId
+	}
 
-		// Get savepoint directory from flinkConfiguration (unchanged logic)
-		if savepointDir, ok := deployment.Spec.FlinkConfiguration["execution.checkpointing.savepoint-dir"]; ok {
-			if savepointDirStr, ok := savepointDir.(string); ok && savepointDirStr != "" {
-				response.SavepointDir = savepointDirStr
-
-				// Get current job ID in S3 format (without dashes) for savepoints
-				jobId := deployment.Status.JobStatus.JobId
-				if jobId != "" {
-					jobId = strings.ReplaceAll(jobId, "-", "")
-
-					// Append job ID to savepoint directory path
-					savepointPath := savepointDirStr
-					if !strings.HasSuffix(savepointPath, "/") {
-						savepointPath += "/"
-					}
-					savepointPath += jobId
-
-					h.logger.Info(ctx, "listing savepoints from %s", savepointPath)
-
-					savepoints, err := h.s3Service.ListStorageCheckpoints(ctx, savepointPath)
-					if err != nil {
-						h.logger.Warn(ctx, "failed to list savepoints: %v", err)
-					} else {
-						response.Savepoints = savepoints
-					}
-				}
-			}
-		}
+	if savepointDir, ok := getStringConfig(flinkConfig, "execution.checkpointing.savepoint-dir"); ok {
+		response.SavepointDir = savepointDir
+		h.populateSavepoints(ctx, savepointDir, jobId, &response)
 	}
 
 	h.logger.Info(ctx, "returning %d checkpoints and %d savepoints for %s/%s",
 		len(response.Checkpoints), len(response.Savepoints), request.Namespace, request.Name)
 
 	return httpserver.NewJsonResponse(response), nil
+}
+
+func getStringConfig(config map[string]any, key string) (string, bool) {
+	value, ok := config[key]
+	if !ok {
+		return "", false
+	}
+
+	stringValue, ok := value.(string)
+	if !ok || stringValue == "" {
+		return "", false
+	}
+
+	return stringValue, true
+}
+
+func buildSavepointPath(savepointDir string, jobId string) string {
+	dashlessJobId := strings.ReplaceAll(jobId, "-", "")
+	path := savepointDir
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+
+	return path + dashlessJobId
+}
+
+func (h *HandlerStorageCheckpoints) populateCheckpoints(ctx context.Context, checkpointBaseDir string, response *StorageCheckpointsResponse) error {
+	jobIds, err := h.s3Service.ListJobDirectories(ctx, checkpointBaseDir)
+	if err != nil {
+		return err
+	}
+
+	h.logger.Info(ctx, "found %d job directories to scan", len(jobIds))
+	for _, jobId := range jobIds {
+		checkpoints, err := h.s3Service.ListValidCheckpoints(ctx, checkpointBaseDir, jobId)
+		if err != nil {
+			h.logger.Warn(ctx, "failed to list checkpoints for job %s: %v", jobId, err)
+
+			continue
+		}
+		response.Checkpoints = append(response.Checkpoints, checkpoints...)
+	}
+
+	return nil
+}
+
+func (h *HandlerStorageCheckpoints) populateSavepoints(ctx context.Context, savepointDir string, jobId string, response *StorageCheckpointsResponse) {
+	if jobId == "" {
+		return
+	}
+
+	savepointPath := buildSavepointPath(savepointDir, jobId)
+	h.logger.Info(ctx, "listing savepoints from %s", savepointPath)
+
+	savepoints, err := h.s3Service.ListStorageCheckpoints(ctx, savepointPath)
+	if err != nil {
+		h.logger.Warn(ctx, "failed to list savepoints: %v", err)
+
+		return
+	}
+
+	response.Savepoints = savepoints
 }

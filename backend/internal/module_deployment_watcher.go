@@ -51,22 +51,20 @@ func ProvideDeploymentWatcherModule(ctx context.Context, config cfg.Config, logg
 	})
 }
 
-func (m *DeploymentWatcherModule) Watch(ctx context.Context) (map[string]map[string]*FlinkDeployment, <-chan DeploymentEvent, chan bool) {
+func (m *DeploymentWatcherModule) Watch(ctx context.Context) (deployments map[string]map[string]*FlinkDeployment, events <-chan DeploymentEvent, stop chan bool) {
 	m.lck.Lock()
 	defer m.lck.Unlock()
 
 	id := uuid.New().NewV4()
 	m.logger.Info(ctx, "adding new watcher with id %s", id)
 	m.channels[id] = make(chan DeploymentEvent, 16)
-	stop := make(chan bool)
+	stop = make(chan bool)
 
 	go func() {
 		<-stop
 		m.lck.Lock()
 		m.logger.Info(context.Background(), "removing watcher with id %s", id)
-		if _, exists := m.channels[id]; exists {
-			delete(m.channels, id)
-		}
+		delete(m.channels, id)
 		m.lck.Unlock()
 	}()
 
@@ -104,50 +102,57 @@ func (m *DeploymentWatcherModule) Run(ctx context.Context) error {
 	})
 
 	cfn.GoWithContext(cfnCtx, func(cfnCtx context.Context) error {
-		var ok bool
-		var event DeploymentEvent
-
-		defer func() {
-			m.lck.Lock()
-			for id, ch := range m.channels {
-				close(ch)
-				delete(m.channels, id)
-			}
-			m.lck.Unlock()
-		}()
-
-		for {
-			select {
-			case <-cfnCtx.Done():
-				return nil
-
-			case event, ok = <-m.watcher.ResultChan():
-				if !ok {
-					return nil
-				}
-
-				fd := event.Deployment
-				m.lck.Lock()
-				if _, ok := m.deployments[fd.Namespace]; !ok {
-					m.deployments[fd.Namespace] = make(map[string]*FlinkDeployment)
-				}
-				m.deployments[fd.Namespace][fd.Name] = fd
-
-				m.logger.Info(context.Background(), "got event from k8s watcher for %s", fd.Name)
-
-				for _, ch := range m.channels {
-					select {
-					case ch <- event:
-					default:
-						// subscriber is not keeping up or dead — skip
-					}
-				}
-				m.lck.Unlock()
-			}
-		}
+		return m.streamEvents(cfnCtx)
 	})
 
 	return cfn.Wait()
+}
+
+func (m *DeploymentWatcherModule) streamEvents(ctx context.Context) error {
+	defer m.closeChannels()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case event, ok := <-m.watcher.ResultChan():
+			if !ok {
+				return nil
+			}
+			m.applyEvent(ctx, event)
+		}
+	}
+}
+
+func (m *DeploymentWatcherModule) closeChannels() {
+	m.lck.Lock()
+	defer m.lck.Unlock()
+
+	for id, ch := range m.channels {
+		close(ch)
+		delete(m.channels, id)
+	}
+}
+
+func (m *DeploymentWatcherModule) applyEvent(ctx context.Context, event DeploymentEvent) {
+	fd := event.Deployment
+	m.lck.Lock()
+	defer m.lck.Unlock()
+
+	if _, ok := m.deployments[fd.Namespace]; !ok {
+		m.deployments[fd.Namespace] = make(map[string]*FlinkDeployment)
+	}
+	m.deployments[fd.Namespace][fd.Name] = fd
+
+	m.logger.Info(ctx, "got event from k8s watcher for %s", fd.Name)
+
+	for _, ch := range m.channels {
+		select {
+		case ch <- event:
+		default:
+			// subscriber is not keeping up or dead — skip
+		}
+	}
 }
 
 func cloneDeployments(deployments map[string]map[string]*FlinkDeployment) map[string]map[string]*FlinkDeployment {

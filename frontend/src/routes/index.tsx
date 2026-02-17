@@ -1,13 +1,14 @@
+import { HomeOutlined } from '@ant-design/icons';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Alert, Badge, Button, Card, Space, Table, Tag, Typography } from 'antd';
 import type { TableProps } from 'antd';
 import type { ColumnsType, FilterValue } from 'antd/es/table/interface';
-import { useDeploymentStreamContext } from '../context/DeploymentStreamContext';
+import { useDeploymentStreamContext } from '../context/useDeploymentStreamContext';
 import type { FlinkDeployment } from '../api/schema';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
 import { JobStatusTag } from '../components/JobStatusTag';
 import { formatAge, formatImageTag } from '../utils/format';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 const { Title, Paragraph } = Typography;
 
@@ -42,15 +43,13 @@ function IndexComponent() {
     });
   }, [deployments]);
 
-  useEffect(() => {
-    if (showNotRunning && notRunningDeployments.length === 0) {
-      setShowNotRunning(false);
-    }
-  }, [notRunningDeployments.length, showNotRunning]);
+  const hasNotRunningDeployments = notRunningDeployments.length > 0;
+
+  const effectiveShowNotRunning = showNotRunning && hasNotRunningDeployments;
 
   const dataSource = useMemo(() => {
-    return showNotRunning ? notRunningDeployments : deployments;
-  }, [deployments, notRunningDeployments, showNotRunning]);
+    return effectiveShowNotRunning ? notRunningDeployments : deployments;
+  }, [deployments, notRunningDeployments, effectiveShowNotRunning]);
 
   const handleToggleNotRunning = () => {
     if (!showNotRunning) {
@@ -74,16 +73,28 @@ function IndexComponent() {
       sorter: (a, b) => a.metadata.name.localeCompare(b.metadata.name),
       defaultSortOrder: 'ascend',
       render: (_, record) => (
-        <Link
-          to="/deployments/$namespace/$name"
-          params={{
-            namespace: record.metadata.namespace,
-            name: record.metadata.name,
-          }}
-          style={{ fontWeight: 'bold' }}
-        >
-          {record.metadata.name}
-        </Link>
+        <Space size="small">
+          <Link
+            to="/deployments/$namespace/$name"
+            params={{
+              namespace: record.metadata.namespace,
+              name: record.metadata.name,
+            }}
+            style={{ fontWeight: 'bold' }}
+          >
+            {record.metadata.name}
+          </Link>
+          {record.spec.ingress?.template && record.status?.jobStatus?.jobId && (
+            <a
+              href={`https://${record.spec.ingress.template}/#/job/running/${record.status.jobStatus.jobId}/overview`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open Flink UI for ${record.metadata.name}`}
+            >
+              <HomeOutlined />
+            </a>
+          )}
+        </Space>
       ),
     },
     {

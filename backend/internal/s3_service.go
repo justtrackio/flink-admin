@@ -73,7 +73,7 @@ func parseS3URI(uri string) (bucket, prefix string, err error) {
 
 	// Ensure prefix ends with "/" for directory listing
 	if prefix != "" && !strings.HasSuffix(prefix, "/") {
-		prefix = prefix + "/"
+		prefix += "/"
 	}
 
 	return bucket, prefix, nil
@@ -285,6 +285,7 @@ func (s *S3Service) ListValidCheckpoints(ctx context.Context, checkpointBasePath
 		metadataInfo, err := s.GetMetadataInfo(ctx, checkpoint.Path)
 		if err != nil {
 			s.logger.Warn(ctx, "failed to check metadata for %s: %v", checkpoint.Path, err)
+
 			continue
 		}
 
