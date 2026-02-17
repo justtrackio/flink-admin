@@ -1,5 +1,5 @@
 import { HomeOutlined } from '@ant-design/icons';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Alert, Badge, Button, Card, Space, Table, Tag, Typography } from 'antd';
 import type { TableProps } from 'antd';
 import type { ColumnsType, FilterValue } from 'antd/es/table/interface';
@@ -8,18 +8,34 @@ import type { FlinkDeployment } from '../api/schema';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
 import { JobStatusTag } from '../components/JobStatusTag';
 import { formatAge, formatImageTag } from '../utils/format';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 const { Title, Paragraph } = Typography;
 
+interface IndexSearchParams {
+  namespace?: string;
+  lifecycleState?: string;
+  showNotRunning?: boolean;
+}
+
 export const Route = createFileRoute('/')({
   component: IndexComponent,
+  validateSearch: (search: Record<string, unknown>): IndexSearchParams => ({
+    namespace: typeof search.namespace === 'string' ? search.namespace : undefined,
+    lifecycleState: typeof search.lifecycleState === 'string' ? search.lifecycleState : undefined,
+    showNotRunning: search.showNotRunning === true || search.showNotRunning === 'true' ? true : undefined,
+  }),
 });
 
 function IndexComponent() {
   const { deployments, isConnected, error, retry } = useDeploymentStreamContext();
-  const [showNotRunning, setShowNotRunning] = useState(false);
-  const [tableFilters, setTableFilters] = useState<Record<string, FilterValue | null>>({});
+  const { namespace, lifecycleState, showNotRunning } = Route.useSearch();
+  const navigate = useNavigate({ from: '/' });
+
+  const tableFilters: Record<string, FilterValue | null> = {
+    namespace: namespace ? [namespace] : null,
+    lifecycleState: lifecycleState ? [lifecycleState] : null,
+  };
 
   // Extract unique namespaces and lifecycle states for filters
   const namespaces = useMemo(() => {
@@ -45,7 +61,7 @@ function IndexComponent() {
 
   const hasNotRunningDeployments = notRunningDeployments.length > 0;
 
-  const effectiveShowNotRunning = showNotRunning && hasNotRunningDeployments;
+  const effectiveShowNotRunning = Boolean(showNotRunning) && hasNotRunningDeployments;
 
   const dataSource = useMemo(() => {
     return effectiveShowNotRunning ? notRunningDeployments : deployments;
@@ -53,16 +69,36 @@ function IndexComponent() {
 
   const handleToggleNotRunning = () => {
     if (!showNotRunning) {
-      setTableFilters({});
-      setShowNotRunning(true);
+      navigate({
+        search: {
+          showNotRunning: true,
+        },
+        replace: true,
+      });
       return;
     }
 
-    setShowNotRunning(false);
+    navigate({
+      search: {
+        namespace,
+        lifecycleState,
+      },
+      replace: true,
+    });
   };
 
   const handleTableChange: TableProps<FlinkDeployment>['onChange'] = (_, filters) => {
-    setTableFilters(filters);
+    const nextNamespace = Array.isArray(filters.namespace) ? filters.namespace[0] : undefined;
+    const nextLifecycleState = Array.isArray(filters.lifecycleState) ? filters.lifecycleState[0] : undefined;
+
+    navigate({
+      search: {
+        namespace: typeof nextNamespace === 'string' ? nextNamespace : undefined,
+        lifecycleState: typeof nextLifecycleState === 'string' ? nextLifecycleState : undefined,
+        showNotRunning: showNotRunning || undefined,
+      },
+      replace: true,
+    });
   };
 
   const columns: ColumnsType<FlinkDeployment> = [
@@ -79,6 +115,11 @@ function IndexComponent() {
             params={{
               namespace: record.metadata.namespace,
               name: record.metadata.name,
+            }}
+            search={{
+              fromNamespace: namespace,
+              fromLifecycleState: lifecycleState,
+              fromShowNotRunning: showNotRunning,
             }}
             style={{ fontWeight: 'bold' }}
           >
@@ -105,6 +146,26 @@ function IndexComponent() {
       onFilter: (value, record) => record.metadata.namespace === value,
       filterMultiple: false,
       filteredValue: tableFilters.namespace || null,
+      render: (value: string) => (
+        <Tag
+          color="blue"
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            const nextNamespace = namespace === value ? undefined : value;
+
+            navigate({
+              search: {
+                namespace: nextNamespace,
+                lifecycleState,
+                showNotRunning: showNotRunning || undefined,
+              },
+              replace: true,
+            });
+          }}
+        >
+          {value}
+        </Tag>
+      ),
     },
     {
       title: 'Lifecycle State',

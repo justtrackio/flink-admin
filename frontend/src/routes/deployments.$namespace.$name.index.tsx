@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Descriptions, Space, Tag } from 'antd';
+import { Descriptions, Table } from 'antd';
+import { useMemo } from 'react';
 import { useDeployment } from '../hooks/useDeployment';
 
 export const Route = createFileRoute('/deployments/$namespace/$name/')({
@@ -16,15 +17,41 @@ function DeploymentDetailsComponent() {
 
   const { spec } = deployment;
 
+  const jobArgs = spec.job.args ?? [];
+  const jobArgsTableData = useMemo(() => {
+    const rows: Array<{ key: string; argKey: string; argValue: string }> = [];
+    for (let idx = 0; idx < jobArgs.length; idx += 2) {
+      const argKey = jobArgs[idx];
+      const argValue = jobArgs[idx + 1] ?? '';
+      rows.push({ key: `${idx}-${argKey}`, argKey, argValue });
+    }
+    return rows;
+  }, [jobArgs]);
+
+  const jobArgsColumns = [
+    {
+      title: 'Key',
+      dataIndex: 'argKey',
+      key: 'argKey',
+      render: (value: string) => <code style={{ fontSize: '12px' }}>{value}</code>,
+    },
+    {
+      title: 'Value',
+      dataIndex: 'argValue',
+      key: 'argValue',
+      render: (value: string) => <code style={{ fontSize: '12px' }}>{value}</code>,
+    },
+  ];
+
   return (
     <Descriptions column={2} bordered size="small">
       <Descriptions.Item label="Image" span={2}>
         <code style={{ fontSize: '12px' }}>{spec.image}</code>
       </Descriptions.Item>
-      <Descriptions.Item label="Flink Version">
+      <Descriptions.Item label="Flink Version" span={2}>
         {spec.flinkVersion}
       </Descriptions.Item>
-      <Descriptions.Item label="Parallelism">
+      <Descriptions.Item label="Parallelism" span={2}>
         {spec.job.parallelism}
       </Descriptions.Item>
       <Descriptions.Item label="Entry Class" span={2}>
@@ -33,26 +60,27 @@ function DeploymentDetailsComponent() {
       <Descriptions.Item label="JAR URI" span={2}>
         <code style={{ fontSize: '12px' }}>{spec.job.jarURI}</code>
       </Descriptions.Item>
-      <Descriptions.Item label="Upgrade Mode">
+      <Descriptions.Item label="Upgrade Mode" span={2}>
         {spec.job.upgradeMode}
       </Descriptions.Item>
-      <Descriptions.Item label="Job State (Spec)">
+      <Descriptions.Item label="Job State (Spec)" span={2}>
         {spec.job.state}
       </Descriptions.Item>
-      {spec.job.args && spec.job.args.length > 0 && (
+      {jobArgs.length > 0 && (
         <Descriptions.Item label="Job Args" span={2}>
-          <Space wrap>
-            {spec.job.args.map((arg, idx) => (
-              <Tag key={idx}>{arg}</Tag>
-            ))}
-          </Space>
+          <Table
+            columns={jobArgsColumns}
+            dataSource={jobArgsTableData}
+            pagination={false}
+            size="small"
+          />
         </Descriptions.Item>
       )}
-      <Descriptions.Item label="Job Manager Resources">
+      <Descriptions.Item label="Job Manager Resources" span={2}>
         {spec.jobManager.resource.cpu} CPU / {spec.jobManager.resource.memory}
         {' '}({spec.jobManager.replicas} {spec.jobManager.replicas === 1 ? 'replica' : 'replicas'})
       </Descriptions.Item>
-      <Descriptions.Item label="Task Manager Resources">
+      <Descriptions.Item label="Task Manager Resources" span={2}>
         {spec.taskManager.resource.cpu} CPU / {spec.taskManager.resource.memory}
       </Descriptions.Item>
     </Descriptions>

@@ -16,8 +16,14 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+const (
+	ClientModeInCluster  = "in-cluster"
+	ClientModeKubeConfig = "kube-config"
+)
+
 type KubeSettings struct {
-	Context string `cfg:"context"`
+	ClientMode string `cfg:"client_mode" default:"in-cluster"`
+	Context    string `cfg:"context"`
 }
 
 type k8sServiceCtxKey struct{}
@@ -32,6 +38,10 @@ func ProvideK8sService(ctx context.Context, config cfg.Config, logger log.Logger
 		settings := &KubeSettings{}
 		if err = config.UnmarshalKey("kube", settings); err != nil {
 			return nil, fmt.Errorf("could not unmarshal kube settings: %w", err)
+		}
+
+		if settings.ClientMode == ClientModeInCluster {
+			return newK8sClientInCluster(config, logger)
 		}
 
 		rules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -57,6 +67,31 @@ func ProvideK8sService(ctx context.Context, config cfg.Config, logger log.Logger
 			client:        client,
 		}, nil
 	})
+}
+
+func newK8sClientInCluster(config cfg.Config, logger log.Logger) (*K8sService, error) {
+	var err error
+	var clientConfig *rest.Config
+	var client *kubernetes.Clientset
+	var dynamicClient dynamic.Interface
+
+	if clientConfig, err = rest.InClusterConfig(); err != nil {
+		return nil, fmt.Errorf("could not load in cluster config: %w", err)
+	}
+
+	if client, err = kubernetes.NewForConfig(clientConfig); err != nil {
+		return nil, fmt.Errorf("could not create k8s client: %w", err)
+	}
+
+	if dynamicClient, err = dynamic.NewForConfig(clientConfig); err != nil {
+		return nil, fmt.Errorf("could not create dynamic client: %w", err)
+	}
+
+	return &K8sService{
+		logger:        logger.WithChannel("k8s"),
+		dynamicClient: dynamicClient,
+		client:        client,
+	}, nil
 }
 
 type K8sService struct {

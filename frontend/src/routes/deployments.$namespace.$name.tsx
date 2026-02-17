@@ -1,6 +1,6 @@
-import { createFileRoute, Link, Outlet, useNavigate, useLocation } from '@tanstack/react-router';
-import { Alert, Button, Card, Descriptions, Space, Tag, Tabs, Typography } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { createFileRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
+import { Alert, Button, Card, Col, Descriptions, Row, Space, Tabs, Tag, Typography } from 'antd';
+import { ArrowLeftOutlined, HomeOutlined } from '@ant-design/icons';
 import { useDeployment } from '../hooks/useDeployment';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
 import { JobStatusTag } from '../components/JobStatusTag';
@@ -8,15 +8,33 @@ import { formatAge } from '../utils/format';
 
 const { Title } = Typography;
 
+interface DeploymentSearchParams {
+  fromNamespace?: string;
+  fromLifecycleState?: string;
+  fromShowNotRunning?: boolean;
+}
+
 export const Route = createFileRoute('/deployments/$namespace/$name')({
   component: DeploymentOverviewComponent,
+  validateSearch: (search: Record<string, unknown>): DeploymentSearchParams => ({
+    fromNamespace: typeof search.fromNamespace === 'string' ? search.fromNamespace : undefined,
+    fromLifecycleState: typeof search.fromLifecycleState === 'string' ? search.fromLifecycleState : undefined,
+    fromShowNotRunning: search.fromShowNotRunning === true || search.fromShowNotRunning === 'true' ? true : undefined,
+  }),
 });
 
 function DeploymentOverviewComponent() {
   const { namespace, name } = Route.useParams();
+  const searchParams = Route.useSearch();
   const deployment = useDeployment(namespace, name);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const returnSearch = {
+    namespace: searchParams.fromNamespace,
+    lifecycleState: searchParams.fromLifecycleState,
+    showNotRunning: searchParams.fromShowNotRunning,
+  };
 
   // Determine active tab based on current path
   const getActiveKey = () => {
@@ -30,17 +48,18 @@ function DeploymentOverviewComponent() {
 
   const handleTabChange = (key: string) => {
     if (key === 'details') {
-      navigate({ to: '/deployments/$namespace/$name', params: { namespace, name } });
-    } else {
-      navigate({ to: `/deployments/$namespace/$name/${key}`, params: { namespace, name } });
+      navigate({ to: '/deployments/$namespace/$name', params: { namespace, name }, search: searchParams });
+      return;
     }
+
+    navigate({ to: `/deployments/$namespace/$name/${key}`, params: { namespace, name }, search: searchParams });
   };
 
   if (!deployment) {
     return (
       <Card>
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Link to="/">
+          <Link to="/" search={returnSearch}>
             <Button icon={<ArrowLeftOutlined />}>Back to Deployments</Button>
           </Link>
           <Alert
@@ -54,7 +73,7 @@ function DeploymentOverviewComponent() {
     );
   }
 
-  const { metadata, status } = deployment;
+  const { metadata, spec, status } = deployment;
 
   const tabItems = [
     {
@@ -76,15 +95,35 @@ function DeploymentOverviewComponent() {
       {/* Header with Status Summary */}
       <Card>
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Link to="/">
+          <Link to="/" search={returnSearch}>
             <Button icon={<ArrowLeftOutlined />} type="link" style={{ padding: 0 }}>
               Back to Deployments
             </Button>
           </Link>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '24px' }}>
             <div style={{ flex: '0 0 auto' }}>
-              <Title level={2} style={{ margin: 0, marginBottom: '8px' }}>{metadata.name}</Title>
-              <Tag color="blue">{metadata.namespace}</Tag>
+              <Row>
+                <Col span={24}>
+                  <Space align="center" style={{ marginBottom: '8px' }}>
+                    <Title level={2} style={{ margin: 0 }}>{metadata.name}</Title>
+                    {spec.ingress?.template && status?.jobStatus?.jobId && (
+                  <a
+                    href={`https://${spec.ingress.template}/#/job/running/${status.jobStatus.jobId}/overview`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open Flink UI for ${metadata.name}`}
+                  >
+                    <HomeOutlined style={{ fontSize: '32px' }} />
+                  </a>
+                    )}
+                  </Space>
+                </Col>
+              </Row>
+              <Row>
+                <Col span={24}>
+                  <Tag color="blue">{metadata.namespace}</Tag>
+                </Col>
+              </Row>
             </div>
             <div style={{ flex: '1 1 auto' }}>
               <Descriptions column={2} bordered size="small">

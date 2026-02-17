@@ -13,7 +13,6 @@ cloud:
   aws:
     defaults:
       endpoint: ""
-      profile: "{aws.organizational_unit}-marketing"
     s3:
       clients:
         default:
@@ -40,4 +39,5 @@ httpserver:
           - /api/deployments/watch
 
 kube:
+  client_mode: "in-cluster"
   context: "arn:aws:eks:eu-central-1:{aws.account_id}:cluster/{aws.organizational_unit}-marketing"
