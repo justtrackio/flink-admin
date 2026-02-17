@@ -1,12 +1,14 @@
-package main
+package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/justtrackio/gosoline/pkg/appctx"
 	"github.com/justtrackio/gosoline/pkg/cfg"
 	"github.com/justtrackio/gosoline/pkg/log"
@@ -236,8 +238,12 @@ func (s *S3Service) GetMetadataInfo(ctx context.Context, s3URI string) (*Metadat
 
 	result, err := s.s3Client.HeadObject(ctx, input)
 	if err != nil {
-		// File doesn't exist or error occurred
-		return &MetadataInfo{Exists: false}, nil
+		var notFound *types.NotFound
+		if errors.As(err, &notFound) {
+			return &MetadataInfo{Exists: false}, nil
+		}
+
+		return nil, fmt.Errorf("failed to get metadata head for s3://%s/%s: %w", bucket, metadataKey, err)
 	}
 
 	return &MetadataInfo{

@@ -1,4 +1,4 @@
-package main
+package internal
 
 // FlinkCheckpointStatistics represents checkpoint statistics from /jobs/:jobid/checkpoints
 type FlinkCheckpointStatistics struct {

@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"context"
@@ -19,20 +19,26 @@ type DeploymentWatcherModule struct {
 	kernel.EssentialModule
 	kernel.ServiceStage
 
+	lck         sync.Mutex
 	logger      log.Logger
 	watcher     *DeploymentWatcher
 	deployments map[string]map[string]*FlinkDeployment
-	lck         sync.Mutex
 	channels    map[string]chan DeploymentEvent
+	namespaces  []string
 }
 
 func ProvideDeploymentWatcherModule(ctx context.Context, config cfg.Config, logger log.Logger) (*DeploymentWatcherModule, error) {
 	return appctx.Provide(ctx, deploymentWatcherModuleCtxKey{}, func() (*DeploymentWatcherModule, error) {
 		var err error
 		var watcher *DeploymentWatcher
+		var namespaces []string
 
 		if watcher, err = NewDeploymentWatcher(ctx, config, logger); err != nil {
 			return nil, fmt.Errorf("failed to initialize k8s service: %w", err)
+		}
+
+		if namespaces, err = config.GetStringSlice("flink.namespaces"); err != nil {
+			return nil, fmt.Errorf("failed to read namespaces from config: %w", err)
 		}
 
 		return &DeploymentWatcherModule{
@@ -40,29 +46,31 @@ func ProvideDeploymentWatcherModule(ctx context.Context, config cfg.Config, logg
 			watcher:     watcher,
 			deployments: make(map[string]map[string]*FlinkDeployment),
 			channels:    map[string]chan DeploymentEvent{},
+			namespaces:  namespaces,
 		}, nil
 	})
 }
 
-func (m *DeploymentWatcherModule) Watch() (map[string]map[string]*FlinkDeployment, <-chan DeploymentEvent, chan bool) {
+func (m *DeploymentWatcherModule) Watch(ctx context.Context) (map[string]map[string]*FlinkDeployment, <-chan DeploymentEvent, chan bool) {
 	m.lck.Lock()
 	defer m.lck.Unlock()
 
 	id := uuid.New().NewV4()
-	ch := make(chan DeploymentEvent, 16)
-	m.logger.Info(context.Background(), "adding new watcher with id %s", id)
-	m.channels[id] = ch
+	m.logger.Info(ctx, "adding new watcher with id %s", id)
+	m.channels[id] = make(chan DeploymentEvent, 16)
 	stop := make(chan bool)
 
 	go func() {
 		<-stop
 		m.lck.Lock()
 		m.logger.Info(context.Background(), "removing watcher with id %s", id)
-		delete(m.channels, id)
+		if _, exists := m.channels[id]; exists {
+			delete(m.channels, id)
+		}
 		m.lck.Unlock()
 	}()
 
-	return m.deployments, ch, stop
+	return cloneDeployments(m.deployments), m.channels[id], stop
 }
 
 // GetDeployment retrieves a single deployment from the in-memory cache by namespace and name
@@ -85,26 +93,28 @@ func (m *DeploymentWatcherModule) GetDeployment(namespace, name string) (*FlinkD
 func (m *DeploymentWatcherModule) Run(ctx context.Context) error {
 	m.logger.Info(ctx, "starting deployment watcher")
 
+	for _, namespace := range m.namespaces {
+		m.deployments[namespace] = make(map[string]*FlinkDeployment)
+	}
+
 	cfn, cfnCtx := coffin.WithContext(ctx)
 
-	cfn.GoWithContext(ctx, func(ctx context.Context) error {
-		<-ctx.Done()
-		m.watcher.Stop()
-
-		return nil
+	cfn.GoWithContext(cfnCtx, func(cfnCtx context.Context) error {
+		return m.watcher.Watch(cfnCtx, m.namespaces)
 	})
-
-	for _, namespace := range []string{"annotators"} {
-		m.deployments[namespace] = make(map[string]*FlinkDeployment)
-
-		cfn.GoWithContext(cfnCtx, func(cfnCtx context.Context) error {
-			return m.watcher.Watch(cfnCtx, namespace)
-		})
-	}
 
 	cfn.GoWithContext(cfnCtx, func(cfnCtx context.Context) error {
 		var ok bool
 		var event DeploymentEvent
+
+		defer func() {
+			m.lck.Lock()
+			for id, ch := range m.channels {
+				close(ch)
+				delete(m.channels, id)
+			}
+			m.lck.Unlock()
+		}()
 
 		for {
 			select {
@@ -117,11 +127,14 @@ func (m *DeploymentWatcherModule) Run(ctx context.Context) error {
 				}
 
 				fd := event.Deployment
+				m.lck.Lock()
+				if _, ok := m.deployments[fd.Namespace]; !ok {
+					m.deployments[fd.Namespace] = make(map[string]*FlinkDeployment)
+				}
 				m.deployments[fd.Namespace][fd.Name] = fd
 
 				m.logger.Info(context.Background(), "got event from k8s watcher for %s", fd.Name)
 
-				m.lck.Lock()
 				for _, ch := range m.channels {
 					select {
 					case ch <- event:
@@ -135,4 +148,17 @@ func (m *DeploymentWatcherModule) Run(ctx context.Context) error {
 	})
 
 	return cfn.Wait()
+}
+
+func cloneDeployments(deployments map[string]map[string]*FlinkDeployment) map[string]map[string]*FlinkDeployment {
+	cloned := make(map[string]map[string]*FlinkDeployment, len(deployments))
+	for namespace, nsDeployments := range deployments {
+		clonedNamespace := make(map[string]*FlinkDeployment, len(nsDeployments))
+		for name, deployment := range nsDeployments {
+			clonedNamespace[name] = deployment
+		}
+		cloned[namespace] = clonedNamespace
+	}
+
+	return cloned
 }

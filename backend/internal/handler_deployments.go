@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"context"
@@ -29,7 +29,7 @@ type HandlerDeployments struct {
 }
 
 func (h *HandlerDeployments) WatchDeployments(ctx context.Context, writer *httpserver.SseWriter) error {
-	deployments, updates, stop := h.watcher.Watch()
+	deployments, updates, stop := h.watcher.Watch(ctx)
 	defer close(stop)
 
 	var err error
@@ -75,7 +75,10 @@ func (h *HandlerDeployments) WatchDeployments(ctx context.Context, writer *https
 		select {
 		case <-ctx.Done():
 			return nil
-		case update := <-updates:
+		case update, ok := <-updates:
+			if !ok {
+				return nil // channel closed, watcher is shutting down
+			}
 			if data, err = json.Marshal(update); err != nil {
 				return fmt.Errorf("could not marshal deployment update: %w", err)
 			}

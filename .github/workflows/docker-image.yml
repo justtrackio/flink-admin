@@ -1,0 +1,190 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  release:
+    types: [published]
+  pull_request:
+    branches: ["main"]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Job 1: Build frontend (architecture-independent)
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: frontend
+        run: bun run build
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 1
+
+  # Job 2: Build Go binaries for each architecture (cross-compilation)
+  binaries:
+    runs-on: ubuntu-latest
+    needs: frontend
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: backend/public
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: backend/go.sum
+
+      - name: Build binary for ${{ matrix.arch }}
+        working-directory: backend
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p ../dist/${{ matrix.arch }}
+          go build -o ../dist/${{ matrix.arch }}/flink-admin .
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: flink-admin-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}/flink-admin
+          retention-days: 1
+
+  # Job 3: Build and push architecture-specific Docker images
+  images:
+    runs-on: ubuntu-latest
+    needs: binaries
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download binary for ${{ matrix.arch }}
+        uses: actions/download-artifact@v4
+        with:
+          name: flink-admin-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}
+
+      - name: Make binary executable
+        run: chmod +x dist/${{ matrix.arch }}/flink-admin
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Suffix all tags with the architecture
+          flavor: |
+            suffix=-${{ matrix.arch }}
+          tags: |
+            type=schedule
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=ref,event=tag
+            type=sha,format=short
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/build/Dockerfile.release
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            TARGETARCH=${{ matrix.arch }}
+          provenance: false
+
+  # Job 4: Create and push multi-arch manifest
+  manifest:
+    runs-on: ubuntu-latest
+    needs: images
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=schedule
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,format=short
+
+      - name: Create and push multi-arch manifests
+        run: |
+          # Get all tags from metadata output (newline-separated)
+          TAGS="${{ steps.meta.outputs.tags }}"
+
+          # Process each tag
+          echo "$TAGS" | while read -r TAG; do
+            if [ -n "$TAG" ]; then
+              echo "Creating manifest for: $TAG"
+              docker buildx imagetools create -t "$TAG" \
+                "${TAG}-amd64" \
+                "${TAG}-arm64"
+            fi
+          done

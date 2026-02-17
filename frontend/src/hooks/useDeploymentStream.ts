@@ -5,7 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Reconnection backoff configuration
 const MIN_BACKOFF_MS = 1_000; // 1 second
-const MAX_BACKOFF_MS = 30_000; // 30 seconds
+const MAX_BACKOFF_MS = 1_000; // 1 seconds
 
 // Heartbeat timeout: if we don't receive ANY data (including heartbeat comments)
 // within this period, assume the connection is dead and reconnect

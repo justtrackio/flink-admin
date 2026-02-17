@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Alert, Badge, Button, Card, Space, Table, Tag, Typography } from 'antd';
-import type { ColumnsType } from 'antd/es/table/interface';
+import type { TableProps } from 'antd';
+import type { ColumnsType, FilterValue } from 'antd/es/table/interface';
 import { useDeploymentStreamContext } from '../context/DeploymentStreamContext';
 import type { FlinkDeployment } from '../api/schema';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
 import { JobStatusTag } from '../components/JobStatusTag';
 import { formatAge, formatImageTag } from '../utils/format';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const { Title, Paragraph } = Typography;
 
@@ -16,6 +17,8 @@ export const Route = createFileRoute('/')({
 
 function IndexComponent() {
   const { deployments, isConnected, error, retry } = useDeploymentStreamContext();
+  const [showNotRunning, setShowNotRunning] = useState(false);
+  const [tableFilters, setTableFilters] = useState<Record<string, FilterValue | null>>({});
 
   // Extract unique namespaces and lifecycle states for filters
   const namespaces = useMemo(() => {
@@ -31,6 +34,37 @@ function IndexComponent() {
     );
     return Array.from(unique).sort();
   }, [deployments]);
+
+  const notRunningDeployments = useMemo(() => {
+    return deployments.filter((deployment) => {
+      const jobState = deployment.status?.jobStatus?.state;
+      return jobState?.toUpperCase() !== 'RUNNING';
+    });
+  }, [deployments]);
+
+  useEffect(() => {
+    if (showNotRunning && notRunningDeployments.length === 0) {
+      setShowNotRunning(false);
+    }
+  }, [notRunningDeployments.length, showNotRunning]);
+
+  const dataSource = useMemo(() => {
+    return showNotRunning ? notRunningDeployments : deployments;
+  }, [deployments, notRunningDeployments, showNotRunning]);
+
+  const handleToggleNotRunning = () => {
+    if (!showNotRunning) {
+      setTableFilters({});
+      setShowNotRunning(true);
+      return;
+    }
+
+    setShowNotRunning(false);
+  };
+
+  const handleTableChange: TableProps<FlinkDeployment>['onChange'] = (_, filters) => {
+    setTableFilters(filters);
+  };
 
   const columns: ColumnsType<FlinkDeployment> = [
     {
@@ -59,6 +93,7 @@ function IndexComponent() {
       filters: namespaces.map((ns) => ({ text: ns, value: ns })),
       onFilter: (value, record) => record.metadata.namespace === value,
       filterMultiple: false,
+      filteredValue: tableFilters.namespace || null,
     },
     {
       title: 'Lifecycle State',
@@ -67,6 +102,7 @@ function IndexComponent() {
       filters: lifecycleStates.map((state) => ({ text: state, value: state })),
       onFilter: (value, record) => record.status?.lifecycleState === value,
       filterMultiple: false,
+      filteredValue: tableFilters.lifecycleState || null,
       render: (state: string) => state ? <DeploymentStatusTag status={state} /> : <Tag>N/A</Tag>,
     },
     {
@@ -152,12 +188,39 @@ function IndexComponent() {
           />
         )}
 
+        {notRunningDeployments.length > 0 && (
+          <Alert
+            type={showNotRunning ? 'info' : 'warning'}
+            banner
+            showIcon
+            message={
+              showNotRunning
+                ? `Showing ${notRunningDeployments.length} not running job${
+                    notRunningDeployments.length !== 1 ? 's' : ''
+                  }`
+                : `${notRunningDeployments.length} job${
+                    notRunningDeployments.length !== 1 ? 's' : ''
+                  } not running`
+            }
+            action={
+              <Button
+                size="small"
+                type={showNotRunning ? 'primary' : 'default'}
+                onClick={handleToggleNotRunning}
+              >
+                {showNotRunning ? 'Show All' : 'Show Not Running'}
+              </Button>
+            }
+          />
+        )}
+
         <Table<FlinkDeployment>
           rowKey={(record) => record.metadata.uid}
           columns={columns}
-          dataSource={deployments}
+          dataSource={dataSource}
+          onChange={handleTableChange}
           pagination={{
-            pageSize: 20,
+            defaultPageSize: 100,
             showSizeChanger: true,
             showTotal: (total) => `Total ${total} deployments`,
           }}

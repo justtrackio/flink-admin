@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"context"
@@ -17,8 +17,7 @@ import (
 )
 
 type KubeSettings struct {
-	Context    string   `cfg:"context"`
-	Namespaces []string `cfg:"namespaces"`
+	Context string `cfg:"context"`
 }
 
 type k8sServiceCtxKey struct{}
@@ -33,10 +32,6 @@ func ProvideK8sService(ctx context.Context, config cfg.Config, logger log.Logger
 		settings := &KubeSettings{}
 		if err = config.UnmarshalKey("kube", settings); err != nil {
 			return nil, fmt.Errorf("could not unmarshal kube settings: %w", err)
-		}
-
-		if len(settings.Namespaces) == 0 {
-			return nil, fmt.Errorf("kube.namespaces must contain at least one namespace")
 		}
 
 		rules := clientcmd.NewDefaultClientConfigLoadingRules()
