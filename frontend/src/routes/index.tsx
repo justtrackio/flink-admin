@@ -1,8 +1,8 @@
-import { HomeOutlined } from '@ant-design/icons';
+import { HomeOutlined  } from '@ant-design/icons';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Alert, Badge, Button, Card, Space, Table, Tag, Typography } from 'antd';
 import type { TableProps } from 'antd';
-import type { ColumnsType, FilterValue } from 'antd/es/table/interface';
+import type { ColumnsType } from 'antd/es/table/interface';
 import { useDeploymentStreamContext } from '../context/useDeploymentStreamContext';
 import type { FlinkDeployment } from '../api/schema';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
@@ -32,10 +32,7 @@ function IndexComponent() {
   const { namespace, lifecycleState, showNotRunning } = Route.useSearch();
   const navigate = useNavigate({ from: '/' });
 
-  const tableFilters: Record<string, FilterValue | null> = {
-    namespace: namespace ? [namespace] : null,
-    lifecycleState: lifecycleState ? [lifecycleState] : null,
-  };
+  const tableKey = `filters:${namespace ?? 'all'}:${lifecycleState ?? 'all'}`;
 
   // Extract unique namespaces and lifecycle states for filters
   const namespaces = useMemo(() => {
@@ -145,7 +142,7 @@ function IndexComponent() {
       filters: namespaces.map((ns) => ({ text: ns, value: ns })),
       onFilter: (value, record) => record.metadata.namespace === value,
       filterMultiple: false,
-      filteredValue: tableFilters.namespace || null,
+      defaultFilteredValue: namespace ? [namespace] : null,
       render: (value: string) => (
         <Tag
           color="blue"
@@ -174,7 +171,7 @@ function IndexComponent() {
       filters: lifecycleStates.map((state) => ({ text: state, value: state })),
       onFilter: (value, record) => record.status?.lifecycleState === value,
       filterMultiple: false,
-      filteredValue: tableFilters.lifecycleState || null,
+      defaultFilteredValue: lifecycleState ? [lifecycleState] : null,
       render: (state: string) => state ? <DeploymentStatusTag status={state} /> : <Tag>N/A</Tag>,
     },
     {
@@ -287,6 +284,7 @@ function IndexComponent() {
         )}
 
         <Table<FlinkDeployment>
+          key={tableKey}
           rowKey={(record) => record.metadata.uid}
           columns={columns}
           dataSource={dataSource}

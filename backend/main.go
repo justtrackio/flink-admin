@@ -47,6 +47,10 @@ func main() {
 				r.GET("/storage-checkpoints", httpserver.Bind(handler.GetStorageCheckpoints))
 			}))
 
+			router.Group("/api/deployments/:namespace/:name").HandleWith(httpserver.With(internal.NewHandlerEvents, func(r *httpserver.Router, handler *internal.HandlerEvents) {
+				r.GET("/events", httpserver.Bind(handler.GetEvents))
+			}))
+
 			return nil
 		})),
 	).Run()

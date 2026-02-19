@@ -1,7 +1,8 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
-import { Alert, Button, Card, Col, Descriptions, Row, Space, Tabs, Tag, Typography } from 'antd';
+import { Alert, Badge, Button, Card, Col, Descriptions, Row, Space, Tabs, Tag, Typography } from 'antd';
 import { ArrowLeftOutlined, HomeOutlined } from '@ant-design/icons';
 import { useDeployment } from '../hooks/useDeployment';
+import { useEvents } from '../hooks/useEvents';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
 import { JobStatusTag } from '../components/JobStatusTag';
 import { formatAge } from '../utils/format';
@@ -27,6 +28,7 @@ function DeploymentOverviewComponent() {
   const { namespace, name } = Route.useParams();
   const searchParams = Route.useSearch();
   const deployment = useDeployment(namespace, name);
+  const events = useEvents(namespace, name);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -41,6 +43,7 @@ function DeploymentOverviewComponent() {
     const path = location.pathname;
     if (path.endsWith('/checkpoints')) return 'checkpoints';
     if (path.endsWith('/storage')) return 'storage';
+    if (path.endsWith('/events')) return 'events';
     return 'details';
   };
 
@@ -75,10 +78,23 @@ function DeploymentOverviewComponent() {
 
   const { metadata, spec, status } = deployment;
 
+  const warningCount = events.data?.filter((e) => e.type !== 'Normal').length ?? 0;
+
   const tabItems = [
     {
       key: 'details',
       label: 'Deployment Details',
+    },
+    {
+      key: 'events',
+      label: (
+        <span>
+          Events
+          {warningCount > 0 && (
+            <Badge count={warningCount} size="small" style={{ marginLeft: 6 }} />
+          )}
+        </span>
+      ),
     },
     {
       key: 'checkpoints',

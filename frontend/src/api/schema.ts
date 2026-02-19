@@ -168,3 +168,19 @@ export interface StorageCheckpointsResponse {
   checkpoints: StorageEntry[];
   savepoints: StorageEntry[];
 }
+
+// Kubernetes Event Types (events.k8s.io/v1)
+
+export interface K8sEvent {
+  type: string;
+  reason: string;
+  note: string;
+  reportingController: string;
+  regarding: string;
+  eventTime: string;
+  action?: string;
+}
+
+export interface K8sEventsResponse {
+  events: K8sEvent[];
+}

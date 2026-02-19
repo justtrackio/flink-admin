@@ -1,12 +1,12 @@
 module github.com/justtrackio/flink-admin
 
-go 1.25.0
+go 1.25.7
 
 require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.61.2
 	github.com/gin-contrib/cors v1.7.3
-	github.com/gosoline-project/httpserver v0.1.1-0.20260207210814-b6b2ed50ec91
-	github.com/justtrackio/gosoline v0.54.8
+	github.com/gosoline-project/httpserver v0.2.0
+	github.com/justtrackio/gosoline v0.55.0
 	k8s.io/apimachinery v0.35.0
 	k8s.io/client-go v0.35.0
 )
@@ -160,6 +160,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/quic-go/quic-go v0.54.1 // indirect
+	github.com/redis/go-redis/v9 v9.17.3 // indirect
 	github.com/segmentio/go-camelcase v0.0.0-20160726192923-7085f1e3c734 // indirect
 	github.com/segmentio/go-snakecase v1.2.0 // indirect
 	github.com/selm0/ladon v0.0.0-20231114080549-31144de4b38d // indirect

@@ -7,6 +7,7 @@ import (
 	"github.com/justtrackio/gosoline/pkg/appctx"
 	"github.com/justtrackio/gosoline/pkg/cfg"
 	"github.com/justtrackio/gosoline/pkg/log"
+	eventsv1 "k8s.io/api/events/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -105,4 +106,16 @@ func (s *K8sService) WatchDeployments(ctx context.Context, namespace string) (wa
 	deployments := s.dynamicClient.Resource(gvr).Namespace(namespace)
 
 	return deployments.Watch(ctx, metav1.ListOptions{})
+}
+
+func (s *K8sService) GetEvents(ctx context.Context, namespace string, name string) (*eventsv1.EventList, error) {
+	fieldSelector := fmt.Sprintf("regarding.name=%s", name)
+	events, err := s.client.EventsV1().Events(namespace).List(ctx, metav1.ListOptions{
+		FieldSelector: fieldSelector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("could not list events for %s/%s: %w", namespace, name, err)
+	}
+
+	return events, nil
 }
