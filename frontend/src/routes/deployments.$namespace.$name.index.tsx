@@ -11,6 +11,17 @@ function DeploymentDetailsComponent() {
   const { namespace, name } = Route.useParams();
   const deployment = useDeployment(namespace, name);
 
+  const jobArgsTableData = useMemo(() => {
+    const args = deployment?.spec.job.args ?? [];
+    const rows: Array<{ key: string; argKey: string; argValue: string }> = [];
+    for (let idx = 0; idx < args.length; idx += 2) {
+      const argKey = args[idx];
+      const argValue = args[idx + 1] ?? '';
+      rows.push({ key: `${idx}-${argKey}`, argKey, argValue });
+    }
+    return rows;
+  }, [deployment?.spec.job.args]);
+
   if (!deployment) {
     return null; // Parent handles "not found"
   }
@@ -18,15 +29,6 @@ function DeploymentDetailsComponent() {
   const { spec } = deployment;
 
   const jobArgs = spec.job.args ?? [];
-  const jobArgsTableData = useMemo(() => {
-    const rows: Array<{ key: string; argKey: string; argValue: string }> = [];
-    for (let idx = 0; idx < jobArgs.length; idx += 2) {
-      const argKey = jobArgs[idx];
-      const argValue = jobArgs[idx + 1] ?? '';
-      rows.push({ key: `${idx}-${argKey}`, argKey, argValue });
-    }
-    return rows;
-  }, [jobArgs]);
 
   const jobArgsColumns = [
     {
