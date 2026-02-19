@@ -184,3 +184,26 @@ export interface K8sEvent {
 export interface K8sEventsResponse {
   events: K8sEvent[];
 }
+
+// Flink REST API Exception Types
+
+export interface FlinkExceptionEntry {
+  exceptionName: string;
+  stacktrace: string;
+  timestamp: number;
+  taskName: string;
+  location: string;
+  endpoint: string;
+  taskManagerId: string;
+  failureLabels?: Record<string, string>;
+  concurrentExceptions?: FlinkExceptionEntry[];
+}
+
+export interface FlinkExceptionHistory {
+  entries: FlinkExceptionEntry[];
+  truncated: boolean;
+}
+
+export interface FlinkJobExceptions {
+  exceptionHistory: FlinkExceptionHistory;
+}

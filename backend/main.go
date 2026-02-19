@@ -51,6 +51,10 @@ func main() {
 				r.GET("/events", httpserver.Bind(handler.GetEvents))
 			}))
 
+			router.Group("/api/deployments/:namespace/:name").HandleWith(httpserver.With(internal.NewHandlerExceptions, func(r *httpserver.Router, handler *internal.HandlerExceptions) {
+				r.GET("/exceptions", httpserver.Bind(handler.GetExceptions))
+			}))
+
 			return nil
 		})),
 	).Run()

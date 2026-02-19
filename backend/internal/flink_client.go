@@ -43,6 +43,16 @@ func (c *FlinkClient) GetCheckpoints(ctx context.Context, clusterURL string, job
 	return &stats, nil
 }
 
+// GetExceptions fetches the job exception history from /jobs/:jobid/exceptions endpoint
+func (c *FlinkClient) GetExceptions(ctx context.Context, clusterURL string, jobID string) (*FlinkJobExceptions, error) {
+	var exceptions FlinkJobExceptions
+	if err := c.get(ctx, clusterURL+"/jobs/"+jobID+"/exceptions?maxExceptions=50", &exceptions); err != nil {
+		return nil, fmt.Errorf("could not get exceptions: %w", err)
+	}
+
+	return &exceptions, nil
+}
+
 // get is a helper method for GET requests with JSON response
 func (c *FlinkClient) get(ctx context.Context, url string, target any) (err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)

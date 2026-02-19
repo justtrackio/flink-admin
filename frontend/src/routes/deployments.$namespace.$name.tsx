@@ -3,6 +3,7 @@ import { Alert, Badge, Button, Card, Col, Descriptions, Row, Space, Tabs, Tag, T
 import { ArrowLeftOutlined, HomeOutlined } from '@ant-design/icons';
 import { useDeployment } from '../hooks/useDeployment';
 import { useEvents } from '../hooks/useEvents';
+import { useExceptions } from '../hooks/useExceptions';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
 import { JobStatusTag } from '../components/JobStatusTag';
 import { formatAge } from '../utils/format';
@@ -29,6 +30,7 @@ function DeploymentOverviewComponent() {
   const searchParams = Route.useSearch();
   const deployment = useDeployment(namespace, name);
   const events = useEvents(namespace, name);
+  const exceptions = useExceptions(namespace, name);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -44,6 +46,7 @@ function DeploymentOverviewComponent() {
     if (path.endsWith('/checkpoints')) return 'checkpoints';
     if (path.endsWith('/storage')) return 'storage';
     if (path.endsWith('/events')) return 'events';
+    if (path.endsWith('/exceptions')) return 'exceptions';
     return 'details';
   };
 
@@ -79,11 +82,23 @@ function DeploymentOverviewComponent() {
   const { metadata, spec, status } = deployment;
 
   const warningCount = events.data?.filter((e) => e.type !== 'Normal').length ?? 0;
+  const exceptionCount = exceptions.data?.exceptionHistory.entries.length ?? 0;
 
   const tabItems = [
     {
       key: 'details',
       label: 'Deployment Details',
+    },
+    {
+      key: 'exceptions',
+      label: (
+        <span>
+          Exceptions
+          {exceptionCount > 0 && (
+            <Badge count={exceptionCount} size="small" style={{ marginLeft: 6 }} />
+          )}
+        </span>
+      ),
     },
     {
       key: 'events',
