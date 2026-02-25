@@ -39,19 +39,17 @@ func main() {
 				r.GET("/watch", httpserver.BindSseN(handler.WatchDeployments))
 			}))
 
-			router.Group("/api/deployments/:namespace/:name").HandleWith(httpserver.With(internal.NewHandlerCheckpoints, func(r *httpserver.Router, handler *internal.HandlerCheckpoints) {
+			deploymentGroup := router.Group("/api/deployments/:namespace/:name")
+			deploymentGroup.HandleWith(httpserver.With(internal.NewHandlerCheckpoints, func(r *httpserver.Router, handler *internal.HandlerCheckpoints) {
 				r.GET("/checkpoints", httpserver.Bind(handler.GetCheckpoints))
 			}))
-
-			router.Group("/api/deployments/:namespace/:name").HandleWith(httpserver.With(internal.NewHandlerStorageCheckpoints, func(r *httpserver.Router, handler *internal.HandlerStorageCheckpoints) {
+			deploymentGroup.HandleWith(httpserver.With(internal.NewHandlerStorageCheckpoints, func(r *httpserver.Router, handler *internal.HandlerStorageCheckpoints) {
 				r.GET("/storage-checkpoints", httpserver.Bind(handler.GetStorageCheckpoints))
 			}))
-
-			router.Group("/api/deployments/:namespace/:name").HandleWith(httpserver.With(internal.NewHandlerEvents, func(r *httpserver.Router, handler *internal.HandlerEvents) {
+			deploymentGroup.HandleWith(httpserver.With(internal.NewHandlerEvents, func(r *httpserver.Router, handler *internal.HandlerEvents) {
 				r.GET("/events", httpserver.Bind(handler.GetEvents))
 			}))
-
-			router.Group("/api/deployments/:namespace/:name").HandleWith(httpserver.With(internal.NewHandlerExceptions, func(r *httpserver.Router, handler *internal.HandlerExceptions) {
+			deploymentGroup.HandleWith(httpserver.With(internal.NewHandlerExceptions, func(r *httpserver.Router, handler *internal.HandlerExceptions) {
 				r.GET("/exceptions", httpserver.Bind(handler.GetExceptions))
 			}))
 

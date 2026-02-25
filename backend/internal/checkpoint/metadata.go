@@ -59,8 +59,7 @@ func Parse(reader io.Reader, options ParseOptions) (*CheckpointMetadata, error) 
 	}
 
 	if version >= 4 && len(propertiesRaw) > 0 {
-		parser := newCheckpointPropertiesParser()
-		metadata.Properties = parser.parse(propertiesRaw)
+		metadata.Properties = parseCheckpointProperties(propertiesRaw)
 	}
 
 	return metadata, nil

@@ -1,6 +1,6 @@
 package checkpoint
 
-import "bytes"
+import "strings"
 
 // scanInlineStrings extracts printable ASCII runs from raw bytes.
 func scanInlineStrings(data []byte) []string {
@@ -44,10 +44,10 @@ func hasStatePathPrefix(value string) bool {
 		return false
 	}
 
-	return bytes.HasPrefix([]byte(value), []byte("s3://")) ||
-		bytes.HasPrefix([]byte(value), []byte("hdfs://")) ||
-		bytes.HasPrefix([]byte(value), []byte("file:/")) ||
-		bytes.HasPrefix([]byte(value), []byte("gs://"))
+	return strings.HasPrefix(value, "s3://") ||
+		strings.HasPrefix(value, "hdfs://") ||
+		strings.HasPrefix(value, "file:/") ||
+		strings.HasPrefix(value, "gs://")
 }
 
 // uniqueStrings preserves first occurrence order for unique values.

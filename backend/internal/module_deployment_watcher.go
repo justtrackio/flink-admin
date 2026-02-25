@@ -24,21 +24,15 @@ type DeploymentWatcherModule struct {
 	watcher     *DeploymentWatcher
 	deployments map[string]map[string]*FlinkDeployment
 	channels    map[string]chan DeploymentEvent
-	namespaces  []string
 }
 
 func ProvideDeploymentWatcherModule(ctx context.Context, config cfg.Config, logger log.Logger) (*DeploymentWatcherModule, error) {
 	return appctx.Provide(ctx, deploymentWatcherModuleCtxKey{}, func() (*DeploymentWatcherModule, error) {
 		var err error
 		var watcher *DeploymentWatcher
-		var namespaces []string
 
 		if watcher, err = NewDeploymentWatcher(ctx, config, logger); err != nil {
 			return nil, fmt.Errorf("failed to initialize k8s service: %w", err)
-		}
-
-		if namespaces, err = config.GetStringSlice("flink.namespaces"); err != nil {
-			return nil, fmt.Errorf("failed to read namespaces from config: %w", err)
 		}
 
 		return &DeploymentWatcherModule{
@@ -46,7 +40,6 @@ func ProvideDeploymentWatcherModule(ctx context.Context, config cfg.Config, logg
 			watcher:     watcher,
 			deployments: make(map[string]map[string]*FlinkDeployment),
 			channels:    map[string]chan DeploymentEvent{},
-			namespaces:  namespaces,
 		}, nil
 	})
 }
@@ -88,17 +81,28 @@ func (m *DeploymentWatcherModule) GetDeployment(namespace, name string) (*FlinkD
 	return deployment, exists
 }
 
+// GetFlinkEndpoint resolves the Flink REST API URL and job ID for a deployment.
+// Returns an error if the deployment is not found or has no ingress configured.
+func (m *DeploymentWatcherModule) GetFlinkEndpoint(namespace, name string) (flinkURL string, jobID string, err error) {
+	deployment, exists := m.GetDeployment(namespace, name)
+	if !exists {
+		return "", "", fmt.Errorf("deployment %s/%s not found", namespace, name)
+	}
+
+	if deployment.Spec.Ingress == nil {
+		return "", "", fmt.Errorf("deployment %s/%s has no ingress configured", namespace, name)
+	}
+
+	return "https://" + deployment.Spec.Ingress.Template, deployment.Status.JobStatus.JobId, nil
+}
+
 func (m *DeploymentWatcherModule) Run(ctx context.Context) error {
 	m.logger.Info(ctx, "starting deployment watcher")
-
-	for _, namespace := range m.namespaces {
-		m.deployments[namespace] = make(map[string]*FlinkDeployment)
-	}
 
 	cfn, cfnCtx := coffin.WithContext(ctx)
 
 	cfn.GoWithContext(cfnCtx, func(cfnCtx context.Context) error {
-		return m.watcher.Watch(cfnCtx, m.namespaces)
+		return m.watcher.Watch(cfnCtx)
 	})
 
 	cfn.GoWithContext(cfnCtx, func(cfnCtx context.Context) error {

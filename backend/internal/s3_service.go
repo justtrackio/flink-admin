@@ -79,8 +79,53 @@ func parseS3URI(uri string) (bucket, prefix string, err error) {
 	return bucket, prefix, nil
 }
 
-// ListStorageCheckpoints lists checkpoint/savepoint directories in S3 storage
-// It uses ListObjectsV2 with delimiter "/" to get only top-level "directories" (common prefixes)
+// listCommonPrefixNames paginates through S3 ListObjectsV2 with a "/" delimiter and returns
+// the directory names (common prefix entries with the base prefix and trailing slash stripped).
+func (s *S3Service) listCommonPrefixNames(ctx context.Context, bucket, prefix string) ([]string, error) {
+	var names []string
+	delimiter := "/"
+	var continuationToken *string
+
+	for {
+		input := &s3.ListObjectsV2Input{
+			Bucket:            &bucket,
+			Prefix:            &prefix,
+			Delimiter:         &delimiter,
+			ContinuationToken: continuationToken,
+		}
+
+		result, err := s.s3Client.ListObjectsV2(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list objects in S3: %w", err)
+		}
+
+		for _, commonPrefix := range result.CommonPrefixes {
+			if commonPrefix.Prefix == nil {
+				continue
+			}
+
+			name := strings.TrimPrefix(*commonPrefix.Prefix, prefix)
+			name = strings.TrimSuffix(name, "/")
+
+			if name == "" {
+				continue
+			}
+
+			names = append(names, name)
+		}
+
+		if result.IsTruncated == nil || !*result.IsTruncated {
+			break
+		}
+
+		continuationToken = result.NextContinuationToken
+	}
+
+	return names, nil
+}
+
+// ListStorageCheckpoints lists checkpoint/savepoint directories in S3 storage.
+// It uses ListObjectsV2 with delimiter "/" to get only top-level "directories" (common prefixes).
 func (s *S3Service) ListStorageCheckpoints(ctx context.Context, s3URI string) ([]StorageEntry, error) {
 	if s3URI == "" {
 		return []StorageEntry{}, nil
@@ -93,52 +138,17 @@ func (s *S3Service) ListStorageCheckpoints(ctx context.Context, s3URI string) ([
 
 	s.logger.Info(ctx, "listing checkpoints in s3://%s/%s", bucket, prefix)
 
-	var entries []StorageEntry
-	delimiter := "/"
-	var continuationToken *string
+	names, err := s.listCommonPrefixNames(ctx, bucket, prefix)
+	if err != nil {
+		return nil, err
+	}
 
-	// Paginate through results
-	for {
-		input := &s3.ListObjectsV2Input{
-			Bucket:            &bucket,
-			Prefix:            &prefix,
-			Delimiter:         &delimiter,
-			ContinuationToken: continuationToken,
-		}
-
-		result, err := s.s3Client.ListObjectsV2(ctx, input)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list objects in S3: %w", err)
-		}
-
-		// Process common prefixes (directories)
-		for _, commonPrefix := range result.CommonPrefixes {
-			if commonPrefix.Prefix == nil {
-				continue
-			}
-
-			fullPrefix := *commonPrefix.Prefix
-
-			// Extract directory name (e.g., "chk-1/", "savepoint-abc123/")
-			dirName := strings.TrimPrefix(fullPrefix, prefix)
-			dirName = strings.TrimSuffix(dirName, "/")
-
-			if dirName == "" {
-				continue
-			}
-
-			entries = append(entries, StorageEntry{
-				Name: dirName,
-				Path: "s3://" + bucket + "/" + fullPrefix,
-			})
-		}
-
-		// Check if there are more results
-		if result.IsTruncated == nil || !*result.IsTruncated {
-			break
-		}
-
-		continuationToken = result.NextContinuationToken
+	entries := make([]StorageEntry, 0, len(names))
+	for _, name := range names {
+		entries = append(entries, StorageEntry{
+			Name: name,
+			Path: "s3://" + bucket + "/" + prefix + name + "/",
+		})
 	}
 
 	s.logger.Info(ctx, "found %d checkpoint/savepoint directories", len(entries))
@@ -146,8 +156,8 @@ func (s *S3Service) ListStorageCheckpoints(ctx context.Context, s3URI string) ([
 	return entries, nil
 }
 
-// ListJobDirectories lists all job ID directories under a given checkpoint base path
-// Returns a list of dashless job IDs found as subdirectories
+// ListJobDirectories lists all job ID directories under a given checkpoint base path.
+// Returns a list of dashless job IDs found as subdirectories.
 func (s *S3Service) ListJobDirectories(ctx context.Context, s3URI string) ([]string, error) {
 	if s3URI == "" {
 		return []string{}, nil
@@ -160,49 +170,9 @@ func (s *S3Service) ListJobDirectories(ctx context.Context, s3URI string) ([]str
 
 	s.logger.Info(ctx, "listing job directories in s3://%s/%s", bucket, prefix)
 
-	var jobIds []string
-	delimiter := "/"
-	var continuationToken *string
-
-	// Paginate through results
-	for {
-		input := &s3.ListObjectsV2Input{
-			Bucket:            &bucket,
-			Prefix:            &prefix,
-			Delimiter:         &delimiter,
-			ContinuationToken: continuationToken,
-		}
-
-		result, err := s.s3Client.ListObjectsV2(ctx, input)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list objects in S3: %w", err)
-		}
-
-		// Process common prefixes (job ID directories)
-		for _, commonPrefix := range result.CommonPrefixes {
-			if commonPrefix.Prefix == nil {
-				continue
-			}
-
-			fullPrefix := *commonPrefix.Prefix
-
-			// Extract directory name (job ID)
-			jobId := strings.TrimPrefix(fullPrefix, prefix)
-			jobId = strings.TrimSuffix(jobId, "/")
-
-			if jobId == "" {
-				continue
-			}
-
-			jobIds = append(jobIds, jobId)
-		}
-
-		// Check if there are more results
-		if result.IsTruncated == nil || !*result.IsTruncated {
-			break
-		}
-
-		continuationToken = result.NextContinuationToken
+	jobIds, err := s.listCommonPrefixNames(ctx, bucket, prefix)
+	if err != nil {
+		return nil, err
 	}
 
 	s.logger.Info(ctx, "found %d job directories", len(jobIds))

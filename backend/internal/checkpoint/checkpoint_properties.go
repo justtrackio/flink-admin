@@ -7,15 +7,8 @@ const (
 	javaStreamVersion = 0x0005
 )
 
-type checkpointPropertiesParser struct{}
-
-// newCheckpointPropertiesParser creates a parser for trailing checkpoint properties bytes.
-func newCheckpointPropertiesParser() *checkpointPropertiesParser {
-	return &checkpointPropertiesParser{}
-}
-
-// parse inspects raw bytes for Java serialization markers and known tokens.
-func (p *checkpointPropertiesParser) parse(raw []byte) *CheckpointProperties {
+// parseCheckpointProperties inspects raw bytes for Java serialization markers and known tokens.
+func parseCheckpointProperties(raw []byte) *CheckpointProperties {
 	if len(raw) < 4 {
 		return nil
 	}

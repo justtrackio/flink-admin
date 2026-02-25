@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/justtrackio/gosoline/pkg/cfg"
-	"github.com/justtrackio/gosoline/pkg/coffin"
 	"github.com/justtrackio/gosoline/pkg/log"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -34,33 +33,12 @@ type DeploymentWatcher struct {
 	resultChan chan DeploymentEvent
 }
 
-func (s *DeploymentWatcher) Watch(ctx context.Context, namespaces []string) error {
-	if len(namespaces) == 0 {
-		close(s.resultChan)
+func (s *DeploymentWatcher) Watch(ctx context.Context) error {
+	var err error
+	var watcher watch.Interface
 
-		return nil
-	}
-
-	cfn, cfnCtx := coffin.WithContext(ctx)
-
-	for _, namespace := range namespaces {
-		cfn.GoWithContext(cfnCtx, func(ctx context.Context) error {
-			return s.watchNamespace(ctx, namespace)
-		})
-	}
-
-	err := cfn.Wait()
-	close(s.resultChan)
-
-	return err
-}
-
-// watchNamespace watches a single namespace for FlinkDeployment events, automatically
-// reconnecting when the underlying K8s watch channel closes.
-func (s *DeploymentWatcher) watchNamespace(ctx context.Context, namespace string) error {
 	for {
-		watcher, err := s.k8sService.WatchDeployments(ctx, namespace)
-		if err != nil {
+		if watcher, err = s.k8sService.WatchDeployments(ctx); err != nil {
 			return fmt.Errorf("could not watch deployments: %w", err)
 		}
 

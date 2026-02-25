@@ -18,14 +18,6 @@ cloud:
         default:
           region: eu-central-1
 
-flink:
-  namespaces:
-    - annotators
-    - denormalizers
-    - lake-ingesters
-    - parquetizers
-    - session-tracker
-
 httpserver:
   default:
     port: 8082
