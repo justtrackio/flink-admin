@@ -1,9 +1,6 @@
-env: "sandbox"
-
-app_project: "justtrack"
-app_family: "gosoline"
-app_group: "flink"
-app_name: "admin"
+app:
+  env: sandbox
+  name: flink-admin
 
 aws:
   account_id: "047452524847"

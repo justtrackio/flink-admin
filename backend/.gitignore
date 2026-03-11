@@ -1,6 +1,5 @@
 config.*.yml
 !config.dist.yml
 public/*
-!public/index.html
 !public/fav.png
 /flink-admin

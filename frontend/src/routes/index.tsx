@@ -51,8 +51,8 @@ function IndexComponent() {
 
   const notRunningDeployments = useMemo(() => {
     return deployments.filter((deployment) => {
-      const jobState = deployment.status?.jobStatus?.state;
-      return jobState?.toUpperCase() !== 'RUNNING';
+      const upperJobState = deployment.status?.jobStatus?.state?.toUpperCase();
+      return upperJobState !== 'RUNNING' && upperJobState !== 'FINISHED';
     });
   }, [deployments]);
 
