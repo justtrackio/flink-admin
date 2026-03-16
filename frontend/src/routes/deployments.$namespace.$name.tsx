@@ -4,6 +4,7 @@ import { ArrowLeftOutlined, HomeOutlined } from '@ant-design/icons';
 import { useDeployment } from '../hooks/useDeployment';
 import { useEvents } from '../hooks/useEvents';
 import { useExceptions } from '../hooks/useExceptions';
+import { DeploymentActionButton } from '../components/DeploymentActionButton';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
 import { JobStatusTag } from '../components/JobStatusTag';
 import { formatAge } from '../utils/format';
@@ -131,21 +132,21 @@ function DeploymentOverviewComponent() {
               Back to Deployments
             </Button>
           </Link>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '24px', flexWrap: 'wrap' }}>
             <div style={{ flex: '0 0 auto' }}>
               <Row>
                 <Col span={24}>
                   <Space align="center" style={{ marginBottom: '8px' }}>
                     <Title level={2} style={{ margin: 0 }}>{metadata.name}</Title>
                     {spec.ingress?.template && status?.jobStatus?.jobId && (
-                  <a
-                    href={`https://${spec.ingress.template}/#/job/running/${status.jobStatus.jobId}/overview`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Open Flink UI for ${metadata.name}`}
-                  >
-                    <HomeOutlined style={{ fontSize: '32px' }} />
-                  </a>
+                      <a
+                        href={`https://${spec.ingress.template}/#/job/running/${status.jobStatus.jobId}/overview`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Open Flink UI for ${metadata.name}`}
+                      >
+                        <HomeOutlined style={{ fontSize: '32px' }} />
+                      </a>
                     )}
                   </Space>
                 </Col>
@@ -155,8 +156,15 @@ function DeploymentOverviewComponent() {
                   <Tag color="blue">{metadata.namespace}</Tag>
                 </Col>
               </Row>
+              <div style={{ marginTop: '16px' }}>
+                <DeploymentActionButton
+                  namespace={metadata.namespace}
+                  name={metadata.name}
+                  desiredJobState={spec.job.state}
+                />
+              </div>
             </div>
-            <div style={{ flex: '1 1 auto' }}>
+            <div style={{ flex: '1 1 560px', minWidth: '280px' }}>
               <Descriptions column={2} bordered size="small">
                 <Descriptions.Item label="Lifecycle State">
                   {status?.lifecycleState ? (

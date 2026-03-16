@@ -22,12 +22,7 @@ type HandlerExceptions struct {
 	flinkDeploymentHandler
 }
 
-type GetExceptionsRequest struct {
-	Namespace string `uri:"namespace"`
-	Name      string `uri:"name"`
-}
-
-func (h *HandlerExceptions) GetExceptions(ctx context.Context, request *GetExceptionsRequest) (httpserver.Response, error) {
+func (h *HandlerExceptions) GetExceptions(ctx context.Context, request *DeploymentSelectorInput) (httpserver.Response, error) {
 	flinkURL, jobID, err := h.watcher.GetFlinkEndpoint(request.Namespace, request.Name)
 	if err != nil {
 		return nil, err

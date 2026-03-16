@@ -26,12 +26,7 @@ type HandlerEvents struct {
 	k8sService *K8sService
 }
 
-type GetEventsRequest struct {
-	Namespace string `uri:"namespace"`
-	Name      string `uri:"name"`
-}
-
-func (h *HandlerEvents) GetEvents(ctx context.Context, request *GetEventsRequest) (httpserver.Response, error) {
+func (h *HandlerEvents) GetEvents(ctx context.Context, request *DeploymentSelectorInput) (httpserver.Response, error) {
 	h.logger.Info(ctx, "fetching events for deployment %s/%s", request.Namespace, request.Name)
 
 	eventList, err := h.k8sService.GetEvents(ctx, request.Namespace, request.Name)

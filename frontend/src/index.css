@@ -10,3 +10,11 @@ body {
 #root {
   min-height: 100vh;
 }
+
+.deployment-row-suspended > td {
+  background: #fff7e6 !important;
+}
+
+.deployment-row-suspended:hover > td {
+  background: #ffe7ba !important;
+}

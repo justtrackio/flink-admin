@@ -5,6 +5,7 @@ import type { TableProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table/interface';
 import { useDeploymentStreamContext } from '../context/useDeploymentStreamContext';
 import type { FlinkDeployment } from '../api/schema';
+import { DeploymentActionButton } from '../components/DeploymentActionButton';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
 import { JobStatusTag } from '../components/JobStatusTag';
 import { formatAge, formatImageTag } from '../utils/format';
@@ -96,6 +97,10 @@ function IndexComponent() {
       },
       replace: true,
     });
+  };
+
+  const getRowClassName = (record: FlinkDeployment): string => {
+    return record.spec.job.state?.toUpperCase() === 'SUSPENDED' ? 'deployment-row-suspended' : '';
   };
 
   const columns: ColumnsType<FlinkDeployment> = [
@@ -220,6 +225,19 @@ function IndexComponent() {
       sorter: (a, b) => new Date(a.metadata.creationTimestamp).getTime() - new Date(b.metadata.creationTimestamp).getTime(),
       render: (timestamp: string) => formatAge(timestamp),
     },
+    {
+      title: 'Action',
+      key: 'action',
+      align: 'center',
+      render: (_, record) => (
+        <DeploymentActionButton
+          namespace={record.metadata.namespace}
+          name={record.metadata.name}
+          desiredJobState={record.spec.job.state}
+          size="small"
+        />
+      ),
+    },
   ];
 
   return (
@@ -286,6 +304,7 @@ function IndexComponent() {
         <Table<FlinkDeployment>
           key={tableKey}
           rowKey={(record) => record.metadata.uid}
+          rowClassName={getRowClassName}
           columns={columns}
           dataSource={dataSource}
           onChange={handleTableChange}

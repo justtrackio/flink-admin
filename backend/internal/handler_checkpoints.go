@@ -22,12 +22,7 @@ type HandlerCheckpoints struct {
 	flinkDeploymentHandler
 }
 
-type GetCheckpointsRequest struct {
-	Namespace string `uri:"namespace"`
-	Name      string `uri:"name"`
-}
-
-func (h *HandlerCheckpoints) GetCheckpoints(ctx context.Context, request *GetCheckpointsRequest) (httpserver.Response, error) {
+func (h *HandlerCheckpoints) GetCheckpoints(ctx context.Context, request *DeploymentSelectorInput) (httpserver.Response, error) {
 	flinkURL, jobID, err := h.watcher.GetFlinkEndpoint(request.Namespace, request.Name)
 	if err != nil {
 		return nil, err

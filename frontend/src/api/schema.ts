@@ -87,6 +87,13 @@ export interface FlinkDeployment {
   status?: FlinkDeploymentStatus;
 }
 
+export interface UpdateDeploymentStateResponse {
+  namespace: string;
+  name: string;
+  state: string;
+  status: string;
+}
+
 export type DeploymentEventType = 'ADDED' | 'MODIFIED' | 'DELETED';
 
 export interface DeploymentEvent {

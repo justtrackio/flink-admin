@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/justtrackio/gosoline/pkg/appctx"
@@ -10,6 +11,7 @@ import (
 	eventsv1 "k8s.io/api/events/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -83,11 +85,34 @@ type K8sService struct {
 	client        *kubernetes.Clientset
 }
 
+func flinkDeploymentGVR() schema.GroupVersionResource {
+	return schema.GroupVersionResource{Group: "flink.apache.org", Version: "v1beta1", Resource: "flinkdeployments"}
+}
+
 func (s *K8sService) WatchDeployments(ctx context.Context) (watch.Interface, error) {
-	gvr := schema.GroupVersionResource{Group: "flink.apache.org", Version: "v1beta1", Resource: "flinkdeployments"}
-	deployments := s.dynamicClient.Resource(gvr)
+	deployments := s.dynamicClient.Resource(flinkDeploymentGVR())
 
 	return deployments.Watch(ctx, metav1.ListOptions{})
+}
+
+func (s *K8sService) PatchDeploymentJobState(ctx context.Context, namespace string, name string, state string) error {
+	patch, err := json.Marshal(map[string]any{
+		"spec": map[string]any{
+			"job": map[string]any{
+				"state": state,
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("could not marshal deployment state patch: %w", err)
+	}
+
+	_, err = s.dynamicClient.Resource(flinkDeploymentGVR()).Namespace(namespace).Patch(ctx, name, k8stypes.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("could not patch deployment %s/%s job state to %s: %w", namespace, name, state, err)
+	}
+
+	return nil
 }
 
 func (s *K8sService) GetEvents(ctx context.Context, namespace string, name string) (*eventsv1.EventList, error) {
