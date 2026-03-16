@@ -14,7 +14,7 @@ const { Title } = Typography;
 interface DeploymentSearchParams {
   fromNamespace?: string;
   fromLifecycleState?: string;
-  fromShowNotRunning?: boolean;
+  fromView?: 'all' | 'not-running';
 }
 
 export const Route = createFileRoute('/deployments/$namespace/$name')({
@@ -22,7 +22,7 @@ export const Route = createFileRoute('/deployments/$namespace/$name')({
   validateSearch: (search: Record<string, unknown>): DeploymentSearchParams => ({
     fromNamespace: typeof search.fromNamespace === 'string' ? search.fromNamespace : undefined,
     fromLifecycleState: typeof search.fromLifecycleState === 'string' ? search.fromLifecycleState : undefined,
-    fromShowNotRunning: search.fromShowNotRunning === true || search.fromShowNotRunning === 'true' ? true : undefined,
+    fromView: search.fromView === 'all' || search.fromView === 'not-running' ? search.fromView : undefined,
   }),
 });
 
@@ -38,7 +38,7 @@ function DeploymentOverviewComponent() {
   const returnSearch = {
     namespace: searchParams.fromNamespace,
     lifecycleState: searchParams.fromLifecycleState,
-    showNotRunning: searchParams.fromShowNotRunning,
+    view: searchParams.fromView,
   };
 
   // Determine active tab based on current path

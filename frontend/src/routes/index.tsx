@@ -1,6 +1,6 @@
 import { HomeOutlined  } from '@ant-design/icons';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Alert, Badge, Button, Card, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Badge, Button, Card, Space, Table, Tabs, Tag, Typography } from 'antd';
 import type { TableProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table/interface';
 import { useDeploymentStreamContext } from '../context/useDeploymentStreamContext';
@@ -13,10 +13,12 @@ import { useMemo } from 'react';
 
 const { Title, Paragraph } = Typography;
 
+type DeploymentView = 'all' | 'not-running';
+
 interface IndexSearchParams {
   namespace?: string;
   lifecycleState?: string;
-  showNotRunning?: boolean;
+  view?: DeploymentView;
 }
 
 export const Route = createFileRoute('/')({
@@ -24,16 +26,24 @@ export const Route = createFileRoute('/')({
   validateSearch: (search: Record<string, unknown>): IndexSearchParams => ({
     namespace: typeof search.namespace === 'string' ? search.namespace : undefined,
     lifecycleState: typeof search.lifecycleState === 'string' ? search.lifecycleState : undefined,
-    showNotRunning: search.showNotRunning === true || search.showNotRunning === 'true' ? true : undefined,
+    view:
+      search.view === 'all' || search.view === 'not-running'
+        ? search.view
+        : search.showNotRunning === true || search.showNotRunning === 'true'
+          ? 'not-running'
+          : undefined,
   }),
 });
 
 function IndexComponent() {
   const { deployments, isConnected, error, retry } = useDeploymentStreamContext();
-  const { namespace, lifecycleState, showNotRunning } = Route.useSearch();
+  const { namespace, lifecycleState, view } = Route.useSearch();
   const navigate = useNavigate({ from: '/' });
+  const activeView: DeploymentView = view ?? 'all';
+  const isNamespaceFilterActive = activeView === 'all';
+  const activeNamespace = isNamespaceFilterActive ? namespace : undefined;
 
-  const tableKey = `filters:${namespace ?? 'all'}:${lifecycleState ?? 'all'}`;
+  const tableKey = `filters:${activeView}:${activeNamespace ?? 'all'}:${lifecycleState ?? 'all'}`;
 
   // Extract unique namespaces and lifecycle states for filters
   const namespaces = useMemo(() => {
@@ -59,27 +69,16 @@ function IndexComponent() {
 
   const hasNotRunningDeployments = notRunningDeployments.length > 0;
 
-  const effectiveShowNotRunning = Boolean(showNotRunning) && hasNotRunningDeployments;
-
   const dataSource = useMemo(() => {
-    return effectiveShowNotRunning ? notRunningDeployments : deployments;
-  }, [deployments, notRunningDeployments, effectiveShowNotRunning]);
+    return activeView === 'not-running' ? notRunningDeployments : deployments;
+  }, [activeView, deployments, notRunningDeployments]);
 
-  const handleToggleNotRunning = () => {
-    if (!showNotRunning) {
-      navigate({
-        search: {
-          showNotRunning: true,
-        },
-        replace: true,
-      });
-      return;
-    }
-
+  const handleViewChange = (nextView: string) => {
     navigate({
       search: {
         namespace,
         lifecycleState,
+        view: nextView === 'not-running' ? 'not-running' : 'all',
       },
       replace: true,
     });
@@ -91,9 +90,12 @@ function IndexComponent() {
 
     navigate({
       search: {
-        namespace: typeof nextNamespace === 'string' ? nextNamespace : undefined,
+        namespace:
+          activeView === 'all' && typeof nextNamespace === 'string'
+            ? nextNamespace
+            : namespace,
         lifecycleState: typeof nextLifecycleState === 'string' ? nextLifecycleState : undefined,
-        showNotRunning: showNotRunning || undefined,
+        view: activeView,
       },
       replace: true,
     });
@@ -121,7 +123,7 @@ function IndexComponent() {
             search={{
               fromNamespace: namespace,
               fromLifecycleState: lifecycleState,
-              fromShowNotRunning: showNotRunning,
+              fromView: activeView,
             }}
             style={{ fontWeight: 'bold' }}
           >
@@ -144,22 +146,26 @@ function IndexComponent() {
       title: 'Namespace',
       dataIndex: ['metadata', 'namespace'],
       key: 'namespace',
-      filters: namespaces.map((ns) => ({ text: ns, value: ns })),
-      onFilter: (value, record) => record.metadata.namespace === value,
+      filters: isNamespaceFilterActive ? namespaces.map((ns) => ({ text: ns, value: ns })) : undefined,
+      onFilter: isNamespaceFilterActive ? (value, record) => record.metadata.namespace === value : undefined,
       filterMultiple: false,
-      defaultFilteredValue: namespace ? [namespace] : null,
+      defaultFilteredValue: activeNamespace ? [activeNamespace] : null,
       render: (value: string) => (
         <Tag
           color="blue"
-          style={{ cursor: 'pointer' }}
+          style={{ cursor: isNamespaceFilterActive ? 'pointer' : 'default' }}
           onClick={() => {
+            if (!isNamespaceFilterActive) {
+              return;
+            }
+
             const nextNamespace = namespace === value ? undefined : value;
 
             navigate({
               search: {
                 namespace: nextNamespace,
                 lifecycleState,
-                showNotRunning: showNotRunning || undefined,
+                view: activeView,
               },
               replace: true,
             });
@@ -275,31 +281,22 @@ function IndexComponent() {
           />
         )}
 
-        {notRunningDeployments.length > 0 && (
-          <Alert
-            type={showNotRunning ? 'info' : 'warning'}
-            banner
-            showIcon
-            message={
-              showNotRunning
-                ? `Showing ${notRunningDeployments.length} not running job${
-                    notRunningDeployments.length !== 1 ? 's' : ''
-                  }`
-                : `${notRunningDeployments.length} job${
-                    notRunningDeployments.length !== 1 ? 's' : ''
-                  } not running`
-            }
-            action={
-              <Button
-                size="small"
-                type={showNotRunning ? 'primary' : 'default'}
-                onClick={handleToggleNotRunning}
-              >
-                {showNotRunning ? 'Show All' : 'Show Not Running'}
-              </Button>
-            }
-          />
-        )}
+        <Tabs
+          activeKey={activeView}
+          onChange={handleViewChange}
+          items={[
+            {
+              key: 'all',
+              label: `All Deployments (${deployments.length})`,
+            },
+            {
+              key: 'not-running',
+              label: hasNotRunningDeployments
+                ? `Not Running (${notRunningDeployments.length})`
+                : 'Not Running',
+            },
+          ]}
+        />
 
         <Table<FlinkDeployment>
           key={tableKey}
