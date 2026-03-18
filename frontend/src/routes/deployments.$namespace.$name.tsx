@@ -7,7 +7,8 @@ import { useExceptions } from '../hooks/useExceptions';
 import { DeploymentActionButton } from '../components/DeploymentActionButton';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
 import { JobStatusTag } from '../components/JobStatusTag';
-import { formatAge } from '../utils/format';
+import { useAdminMode } from '../context/useAdminMode';
+import { formatAge, formatTimestampUtc } from '../utils/format';
 
 const { Title } = Typography;
 
@@ -29,6 +30,7 @@ export const Route = createFileRoute('/deployments/$namespace/$name')({
 function DeploymentOverviewComponent() {
   const { namespace, name } = Route.useParams();
   const searchParams = Route.useSearch();
+  const { isAdminMode } = useAdminMode();
   const deployment = useDeployment(namespace, name);
   const events = useEvents(namespace, name);
   const exceptions = useExceptions(namespace, name);
@@ -156,13 +158,15 @@ function DeploymentOverviewComponent() {
                   <Tag color="blue">{metadata.namespace}</Tag>
                 </Col>
               </Row>
-              <div style={{ marginTop: '16px' }}>
-                <DeploymentActionButton
-                  namespace={metadata.namespace}
-                  name={metadata.name}
-                  desiredJobState={spec.job.state}
-                />
-              </div>
+              {isAdminMode && (
+                <div style={{ marginTop: '16px' }}>
+                  <DeploymentActionButton
+                    namespace={metadata.namespace}
+                    name={metadata.name}
+                    desiredJobState={spec.job.state}
+                  />
+                </div>
+              )}
             </div>
             <div style={{ flex: '1 1 560px', minWidth: '280px' }}>
               <Descriptions column={2} bordered size="small">
@@ -183,10 +187,10 @@ function DeploymentOverviewComponent() {
                   {formatAge(metadata.creationTimestamp)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Job Start Time">
-                  {status?.jobStatus?.startTime || 'N/A'}
+                  {status?.jobStatus?.startTime ? formatTimestampUtc(status.jobStatus.startTime) : 'N/A'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Job Update Time">
-                  {status?.jobStatus?.updateTime || 'N/A'}
+                  {status?.jobStatus?.updateTime ? formatTimestampUtc(status.jobStatus.updateTime) : 'N/A'}
                 </Descriptions.Item>
               </Descriptions>
             </div>

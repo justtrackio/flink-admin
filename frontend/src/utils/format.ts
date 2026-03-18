@@ -58,6 +58,51 @@ export function formatTimestamp(epochMs: number): string {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
+export function formatTimestampUtc(timestamp: string | number): string {
+  const date = parseTimestamp(timestamp);
+
+  if (!date) {
+    return 'Invalid timestamp';
+  }
+
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} UTC`;
+}
+
+function parseTimestamp(timestamp: string | number): Date | null {
+  if (typeof timestamp === 'number') {
+    return createDateFromEpoch(timestamp);
+  }
+
+  const trimmedTimestamp = timestamp.trim();
+
+  if (!trimmedTimestamp) {
+    return null;
+  }
+
+  const numericTimestamp = Number(trimmedTimestamp);
+
+  if (!Number.isNaN(numericTimestamp)) {
+    return createDateFromEpoch(numericTimestamp);
+  }
+
+  const date = new Date(trimmedTimestamp);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function createDateFromEpoch(epoch: number): Date | null {
+  const epochMs = Math.abs(epoch) < 1_000_000_000_000 ? epoch * 1000 : epoch;
+  const date = new Date(epochMs);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 /**
  * Formats a byte size into a human-readable string (e.g., "1.5 MB", "3.2 GB").
  * @param bytes - Size in bytes

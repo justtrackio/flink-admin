@@ -2,8 +2,9 @@ import { HomeOutlined  } from '@ant-design/icons';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Alert, Badge, Button, Card, Space, Table, Tabs, Tag, Typography } from 'antd';
 import type { TableProps } from 'antd';
-import type { ColumnsType } from 'antd/es/table/interface';
+import type { ColumnType, ColumnsType } from 'antd/es/table/interface';
 import { useDeploymentStreamContext } from '../context/useDeploymentStreamContext';
+import { useAdminMode } from '../context/useAdminMode';
 import type { FlinkDeployment } from '../api/schema';
 import { DeploymentActionButton } from '../components/DeploymentActionButton';
 import { DeploymentStatusTag } from '../components/DeploymentStatusTag';
@@ -11,7 +12,7 @@ import { JobStatusTag } from '../components/JobStatusTag';
 import { formatAge, formatImageTag } from '../utils/format';
 import { useMemo } from 'react';
 
-const { Title, Paragraph } = Typography;
+const { Title } = Typography;
 
 type DeploymentView = 'all' | 'not-running';
 
@@ -37,6 +38,7 @@ export const Route = createFileRoute('/')({
 
 function IndexComponent() {
   const { deployments, isConnected, error, retry } = useDeploymentStreamContext();
+  const { isAdminMode } = useAdminMode();
   const { namespace, lifecycleState, view } = Route.useSearch();
   const navigate = useNavigate({ from: '/' });
   const activeView: DeploymentView = view ?? 'all';
@@ -103,6 +105,20 @@ function IndexComponent() {
 
   const getRowClassName = (record: FlinkDeployment): string => {
     return record.spec.job.state?.toUpperCase() === 'SUSPENDED' ? 'deployment-row-suspended' : '';
+  };
+
+  const actionColumn: ColumnType<FlinkDeployment> = {
+    title: 'Action',
+    key: 'action',
+    align: 'center',
+    render: (_, record) => (
+      <DeploymentActionButton
+        namespace={record.metadata.namespace}
+        name={record.metadata.name}
+        desiredJobState={record.spec.job.state}
+        size="small"
+      />
+    ),
   };
 
   const columns: ColumnsType<FlinkDeployment> = [
@@ -231,19 +247,7 @@ function IndexComponent() {
       sorter: (a, b) => new Date(a.metadata.creationTimestamp).getTime() - new Date(b.metadata.creationTimestamp).getTime(),
       render: (timestamp: string) => formatAge(timestamp),
     },
-    {
-      title: 'Action',
-      key: 'action',
-      align: 'center',
-      render: (_, record) => (
-        <DeploymentActionButton
-          namespace={record.metadata.namespace}
-          name={record.metadata.name}
-          desiredJobState={record.spec.job.state}
-          size="small"
-        />
-      ),
-    },
+    ...(isAdminMode ? [actionColumn] : []),
   ];
 
   return (
@@ -252,9 +256,6 @@ function IndexComponent() {
         <Space align="center" style={{ justifyContent: 'space-between', width: '100%' }}>
           <div>
             <Title level={2} style={{ margin: 0 }}>Flink Deployments</Title>
-            <Paragraph style={{ margin: 0 }}>
-              Real-time view of FlinkDeployment resources
-            </Paragraph>
           </div>
           <Space>
             <Badge

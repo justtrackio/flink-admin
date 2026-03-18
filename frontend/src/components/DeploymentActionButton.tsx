@@ -1,4 +1,5 @@
 import { Button, Popconfirm, Tag } from 'antd';
+import { useAdminMode } from '../context/useAdminMode';
 import { useDeploymentActions } from '../hooks/useDeploymentActions';
 import { useMessageApi } from '../context/MessageContext';
 
@@ -59,6 +60,7 @@ function getActionConfig(desiredJobState?: string): ActionConfig | null {
 }
 
 export function DeploymentActionButton({ namespace, name, desiredJobState, size = 'middle' }: DeploymentActionButtonProps) {
+  const { isAdminMode } = useAdminMode();
   const actionConfig = getActionConfig(desiredJobState);
   const { suspendDeployment, resumeDeployment, isLoading, pendingAction, error } = useDeploymentActions(namespace, name);
   const messageApi = useMessageApi();
@@ -80,6 +82,10 @@ export function DeploymentActionButton({ namespace, name, desiredJobState, size 
       void messageApi.error(getActionErrorMessage(requestError, error));
     }
   };
+
+  if (!isAdminMode) {
+    return null;
+  }
 
   if (!actionConfig) {
     return <Tag>Action unavailable</Tag>;
