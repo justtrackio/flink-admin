@@ -25,8 +25,10 @@ type S3Service struct {
 
 func ProvideS3Service(ctx context.Context, config cfg.Config, logger log.Logger) (*S3Service, error) {
 	return appctx.Provide(ctx, s3ServiceCtxKey{}, func() (*S3Service, error) {
-		s3Client, err := gosoS3.ProvideClient(ctx, config, logger, "default")
-		if err != nil {
+		var err error
+		var s3Client *s3.Client
+
+		if s3Client, err = gosoS3.ProvideClient(ctx, config, logger, "default"); err != nil {
 			return nil, fmt.Errorf("could not create s3 client: %w", err)
 		}
 
@@ -82,7 +84,9 @@ func parseS3URI(uri string) (bucket, prefix string, err error) {
 // listCommonPrefixNames paginates through S3 ListObjectsV2 with a "/" delimiter and returns
 // the directory names (common prefix entries with the base prefix and trailing slash stripped).
 func (s *S3Service) listCommonPrefixNames(ctx context.Context, bucket, prefix string) ([]string, error) {
+	var err error
 	var names []string
+	var result *s3.ListObjectsV2Output
 	delimiter := "/"
 	var continuationToken *string
 
@@ -94,8 +98,7 @@ func (s *S3Service) listCommonPrefixNames(ctx context.Context, bucket, prefix st
 			ContinuationToken: continuationToken,
 		}
 
-		result, err := s.s3Client.ListObjectsV2(ctx, input)
-		if err != nil {
+		if result, err = s.s3Client.ListObjectsV2(ctx, input); err != nil {
 			return nil, fmt.Errorf("failed to list objects in S3: %w", err)
 		}
 
@@ -127,19 +130,22 @@ func (s *S3Service) listCommonPrefixNames(ctx context.Context, bucket, prefix st
 // ListStorageCheckpoints lists checkpoint/savepoint directories in S3 storage.
 // It uses ListObjectsV2 with delimiter "/" to get only top-level "directories" (common prefixes).
 func (s *S3Service) ListStorageCheckpoints(ctx context.Context, s3URI string) ([]StorageEntry, error) {
+	var err error
+	var bucket string
+	var prefix string
+	var names []string
+
 	if s3URI == "" {
 		return []StorageEntry{}, nil
 	}
 
-	bucket, prefix, err := parseS3URI(s3URI)
-	if err != nil {
+	if bucket, prefix, err = parseS3URI(s3URI); err != nil {
 		return nil, fmt.Errorf("failed to parse S3 URI: %w", err)
 	}
 
 	s.logger.Info(ctx, "listing checkpoints in s3://%s/%s", bucket, prefix)
 
-	names, err := s.listCommonPrefixNames(ctx, bucket, prefix)
-	if err != nil {
+	if names, err = s.listCommonPrefixNames(ctx, bucket, prefix); err != nil {
 		return nil, err
 	}
 
@@ -159,19 +165,22 @@ func (s *S3Service) ListStorageCheckpoints(ctx context.Context, s3URI string) ([
 // ListJobDirectories lists all job ID directories under a given checkpoint base path.
 // Returns a list of dashless job IDs found as subdirectories.
 func (s *S3Service) ListJobDirectories(ctx context.Context, s3URI string) ([]string, error) {
+	var err error
+	var bucket string
+	var prefix string
+	var jobIds []string
+
 	if s3URI == "" {
 		return []string{}, nil
 	}
 
-	bucket, prefix, err := parseS3URI(s3URI)
-	if err != nil {
+	if bucket, prefix, err = parseS3URI(s3URI); err != nil {
 		return nil, fmt.Errorf("failed to parse S3 URI: %w", err)
 	}
 
 	s.logger.Info(ctx, "listing job directories in s3://%s/%s", bucket, prefix)
 
-	jobIds, err := s.listCommonPrefixNames(ctx, bucket, prefix)
-	if err != nil {
+	if jobIds, err = s.listCommonPrefixNames(ctx, bucket, prefix); err != nil {
 		return nil, err
 	}
 
@@ -182,12 +191,16 @@ func (s *S3Service) ListJobDirectories(ctx context.Context, s3URI string) ([]str
 
 // GetMetadataInfo checks if a checkpoint directory contains a _metadata file and returns its info
 func (s *S3Service) GetMetadataInfo(ctx context.Context, s3URI string) (*MetadataInfo, error) {
+	var err error
+	var bucket string
+	var prefix string
+	var result *s3.HeadObjectOutput
+
 	if s3URI == "" {
 		return &MetadataInfo{Exists: false}, nil
 	}
 
-	bucket, prefix, err := parseS3URI(s3URI)
-	if err != nil {
+	if bucket, prefix, err = parseS3URI(s3URI); err != nil {
 		return nil, fmt.Errorf("failed to parse S3 URI: %w", err)
 	}
 
@@ -206,8 +219,7 @@ func (s *S3Service) GetMetadataInfo(ctx context.Context, s3URI string) (*Metadat
 		Key:    &metadataKey,
 	}
 
-	result, err := s.s3Client.HeadObject(ctx, input)
-	if err != nil {
+	if result, err = s.s3Client.HeadObject(ctx, input); err != nil {
 		var notFound *types.NotFound
 		if errors.As(err, &notFound) {
 			return &MetadataInfo{Exists: false}, nil
@@ -225,6 +237,10 @@ func (s *S3Service) GetMetadataInfo(ctx context.Context, s3URI string) (*Metadat
 
 // ListValidCheckpoints lists all valid checkpoints (chk-* with _metadata) for a given job ID
 func (s *S3Service) ListValidCheckpoints(ctx context.Context, checkpointBasePath string, jobId string) ([]StorageEntry, error) {
+	var err error
+	var allCheckpoints []StorageEntry
+	var metadataInfo *MetadataInfo
+
 	if checkpointBasePath == "" || jobId == "" {
 		return []StorageEntry{}, nil
 	}
@@ -239,8 +255,7 @@ func (s *S3Service) ListValidCheckpoints(ctx context.Context, checkpointBasePath
 	s.logger.Info(ctx, "listing valid checkpoints for job %s in %s", jobId, jobPath)
 
 	// First, list all checkpoint directories (chk-*)
-	allCheckpoints, err := s.ListStorageCheckpoints(ctx, jobPath)
-	if err != nil {
+	if allCheckpoints, err = s.ListStorageCheckpoints(ctx, jobPath); err != nil {
 		return nil, fmt.Errorf("failed to list checkpoints for job %s: %w", jobId, err)
 	}
 
@@ -252,8 +267,7 @@ func (s *S3Service) ListValidCheckpoints(ctx context.Context, checkpointBasePath
 		}
 
 		// Get metadata file info
-		metadataInfo, err := s.GetMetadataInfo(ctx, checkpoint.Path)
-		if err != nil {
+		if metadataInfo, err = s.GetMetadataInfo(ctx, checkpoint.Path); err != nil {
 			s.logger.Warn(ctx, "failed to check metadata for %s: %v", checkpoint.Path, err)
 
 			continue

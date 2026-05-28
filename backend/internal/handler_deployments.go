@@ -41,6 +41,9 @@ func (h *HandlerDeployments) WatchDeployments(ctx context.Context, writer *https
 }
 
 func sendInitialDeployments(writer *httpserver.SseWriter, deployments map[string]map[string]*FlinkDeployment, firstEvent *bool) error {
+	var err error
+	var data []byte
+
 	for _, nsDeployments := range deployments {
 		for _, deployment := range nsDeployments {
 			event := DeploymentEvent{
@@ -48,8 +51,7 @@ func sendInitialDeployments(writer *httpserver.SseWriter, deployments map[string
 				Deployment: deployment,
 			}
 
-			data, err := json.Marshal(event)
-			if err != nil {
+			if data, err = json.Marshal(event); err != nil {
 				return fmt.Errorf("could not marshal deployment: %w", err)
 			}
 

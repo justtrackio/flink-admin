@@ -17,14 +17,17 @@ const (
 // (since V1 format doesn't include a type discriminator byte).
 // For v6+, the type is read from the stream.
 func readChannelStateHandles(br *binaryReader, version int32, channelType ChannelStateType, parseFull bool) ([]ChannelStateHandle, error) {
+	var err error
+	var count int32
+
 	if version < 3 {
 		return nil, nil
 	}
 
-	count, err := br.ReadInt32()
-	if err != nil {
+	if count, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read channel state count: %w", err)
 	}
+
 	if count < 0 {
 		return nil, fmt.Errorf("channel state count negative: %d", count)
 	}
@@ -68,8 +71,10 @@ func readChannelStateHandleV1(br *binaryReader, channelType ChannelStateType, pa
 
 // readChannelStateHandleV2 parses channel state handles for metadata v6+.
 func readChannelStateHandleV2(br *binaryReader, parseFull bool) (ChannelStateHandle, error) {
-	stateType, err := br.ReadByte()
-	if err != nil {
+	var err error
+	var stateType byte
+
+	if stateType, err = br.ReadByte(); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read channel state type: %w", err)
 	}
 
@@ -102,41 +107,50 @@ func readResultSubpartitionStateHandle(br *binaryReader, stateType byte, parseFu
 // subtask (int32), index1 (int32), index2 (int32), offsets (int32 count + int64s),
 // stateSize (int64), delegate (StreamStateHandle).
 func readUnmergedChannelStateHandle(br *binaryReader, stateType byte, parseFull bool, label string) (ChannelStateHandle, error) {
-	subtask, err := br.ReadInt32()
-	if err != nil {
+	var err error
+	var subtask int32
+	var index1 int32
+	var index2 int32
+	var offsetCount int32
+	var stateSize int64
+	var delegate *StreamStateHandle
+	var offset int64
+
+	if subtask, err = br.ReadInt32(); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s subtask: %w", label, err)
 	}
-	index1, err := br.ReadInt32()
-	if err != nil {
+
+	if index1, err = br.ReadInt32(); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s index1: %w", label, err)
 	}
-	index2, err := br.ReadInt32()
-	if err != nil {
+
+	if index2, err = br.ReadInt32(); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s index2: %w", label, err)
 	}
-	offsetCount, err := br.ReadInt32()
-	if err != nil {
+
+	if offsetCount, err = br.ReadInt32(); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s offset count: %w", label, err)
 	}
+
 	if offsetCount < 0 {
 		return ChannelStateHandle{}, fmt.Errorf("%s offset count negative: %d", label, offsetCount)
 	}
 	offsets := make([]int64, offsetCount)
 	for i := int32(0); i < offsetCount; i++ {
-		offset, err := br.ReadInt64()
-		if err != nil {
+		if offset, err = br.ReadInt64(); err != nil {
 			return ChannelStateHandle{}, fmt.Errorf("read %s offset: %w", label, err)
 		}
+
 		offsets[i] = offset
 	}
-	stateSize, err := br.ReadInt64()
-	if err != nil {
+	if stateSize, err = br.ReadInt64(); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s state size: %w", label, err)
 	}
-	delegate, err := readStreamStateHandle(br)
-	if err != nil {
+
+	if delegate, err = readStreamStateHandle(br); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s delegate: %w", label, err)
 	}
+
 	if !parseFull {
 		return ChannelStateHandle{
 			Type:         stateType,
@@ -171,26 +185,33 @@ func readMergedResultSubpartitionStateHandle(br *binaryReader, stateType byte, p
 // and readMergedResultSubpartitionStateHandle. Both have identical binary layouts:
 // subtask (int32), stateSize (int64), delegate (StreamStateHandle), rawOffsets (int32 length + bytes).
 func readMergedChannelStateHandle(br *binaryReader, stateType byte, parseFull bool, label string) (ChannelStateHandle, error) {
-	subtask, err := br.ReadInt32()
-	if err != nil {
+	var err error
+	var subtask int32
+	var stateSize int64
+	var delegate *StreamStateHandle
+	var length int32
+	var data []byte
+
+	if subtask, err = br.ReadInt32(); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s subtask: %w", label, err)
 	}
-	stateSize, err := br.ReadInt64()
-	if err != nil {
+
+	if stateSize, err = br.ReadInt64(); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s state size: %w", label, err)
 	}
-	delegate, err := readStreamStateHandle(br)
-	if err != nil {
+
+	if delegate, err = readStreamStateHandle(br); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s delegate: %w", label, err)
 	}
-	length, err := br.ReadInt32()
-	if err != nil {
+
+	if length, err = br.ReadInt32(); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s offsets length: %w", label, err)
 	}
-	data, err := br.ReadBytes(int(length))
-	if err != nil {
+
+	if data, err = br.ReadBytes(int(length)); err != nil {
 		return ChannelStateHandle{}, fmt.Errorf("read %s offsets: %w", label, err)
 	}
+
 	if !parseFull {
 		return ChannelStateHandle{
 			Type:         stateType,

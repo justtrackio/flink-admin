@@ -3,3 +3,4 @@ config.*.yml
 public/*
 !public/fav.png
 /flink-admin
+/bin

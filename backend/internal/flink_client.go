@@ -55,17 +55,19 @@ func (c *FlinkClient) GetExceptions(ctx context.Context, clusterURL string, jobI
 
 // get is a helper method for GET requests with JSON response
 func (c *FlinkClient) get(ctx context.Context, url string, target any) (err error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
-	if err != nil {
+	var req *http.Request
+	var resp *http.Response
+
+	if req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody); err != nil {
 		return fmt.Errorf("could not create request: %w", err)
 	}
 
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
+	if resp, err = c.httpClient.Do(req); err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
+
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil && err == nil {
 			err = fmt.Errorf("close response body: %w", cerr)

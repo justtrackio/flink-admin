@@ -117,19 +117,22 @@ func buildSavepointPath(savepointDir string, jobId string) string {
 }
 
 func (h *HandlerStorageCheckpoints) populateCheckpoints(ctx context.Context, checkpointBaseDir string, response *StorageCheckpointsResponse) error {
-	jobIds, err := h.s3Service.ListJobDirectories(ctx, checkpointBaseDir)
-	if err != nil {
+	var err error
+	var jobIds []string
+	var checkpoints []StorageEntry
+
+	if jobIds, err = h.s3Service.ListJobDirectories(ctx, checkpointBaseDir); err != nil {
 		return err
 	}
 
 	h.logger.Info(ctx, "found %d job directories to scan", len(jobIds))
 	for _, jobId := range jobIds {
-		checkpoints, err := h.s3Service.ListValidCheckpoints(ctx, checkpointBaseDir, jobId)
-		if err != nil {
+		if checkpoints, err = h.s3Service.ListValidCheckpoints(ctx, checkpointBaseDir, jobId); err != nil {
 			h.logger.Warn(ctx, "failed to list checkpoints for job %s: %v", jobId, err)
 
 			continue
 		}
+
 		response.Checkpoints = append(response.Checkpoints, checkpoints...)
 	}
 
@@ -137,6 +140,9 @@ func (h *HandlerStorageCheckpoints) populateCheckpoints(ctx context.Context, che
 }
 
 func (h *HandlerStorageCheckpoints) populateSavepoints(ctx context.Context, savepointDir string, jobId string, response *StorageCheckpointsResponse) {
+	var err error
+	var savepoints []StorageEntry
+
 	if jobId == "" {
 		return
 	}
@@ -144,8 +150,7 @@ func (h *HandlerStorageCheckpoints) populateSavepoints(ctx context.Context, save
 	savepointPath := buildSavepointPath(savepointDir, jobId)
 	h.logger.Info(ctx, "listing savepoints from %s", savepointPath)
 
-	savepoints, err := h.s3Service.ListStorageCheckpoints(ctx, savepointPath)
-	if err != nil {
+	if savepoints, err = h.s3Service.ListStorageCheckpoints(ctx, savepointPath); err != nil {
 		h.logger.Warn(ctx, "failed to list savepoints: %v", err)
 
 		return

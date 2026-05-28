@@ -10,8 +10,10 @@ import (
 )
 
 func NewHandlerExceptions(ctx context.Context, config cfg.Config, logger log.Logger) (*HandlerExceptions, error) {
-	base, err := newFlinkDeploymentHandler(ctx, config, logger, "handler_exceptions")
-	if err != nil {
+	var err error
+	var base flinkDeploymentHandler
+
+	if base, err = newFlinkDeploymentHandler(ctx, config, logger, "handler_exceptions"); err != nil {
 		return nil, err
 	}
 
@@ -23,15 +25,18 @@ type HandlerExceptions struct {
 }
 
 func (h *HandlerExceptions) GetExceptions(ctx context.Context, request *DeploymentSelectorInput) (httpserver.Response, error) {
-	flinkURL, jobID, err := h.watcher.GetFlinkEndpoint(request.Namespace, request.Name)
-	if err != nil {
+	var err error
+	var flinkURL string
+	var jobID string
+	var exceptions *FlinkJobExceptions
+
+	if flinkURL, jobID, err = h.watcher.GetFlinkEndpoint(request.Namespace, request.Name); err != nil {
 		return nil, err
 	}
 
 	h.logger.Info(ctx, "fetching exceptions for deployment %s/%s (job %s) from %s", request.Namespace, request.Name, jobID, flinkURL)
 
-	exceptions, err := h.client.GetExceptions(ctx, flinkURL, jobID)
-	if err != nil {
+	if exceptions, err = h.client.GetExceptions(ctx, flinkURL, jobID); err != nil {
 		return nil, fmt.Errorf("failed to fetch exceptions from Flink: %w", err)
 	}
 

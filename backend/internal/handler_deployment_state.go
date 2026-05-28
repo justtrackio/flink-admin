@@ -15,8 +15,10 @@ const (
 )
 
 func NewHandlerDeploymentState(ctx context.Context, config cfg.Config, logger log.Logger) (*HandlerDeploymentState, error) {
-	k8sService, err := ProvideK8sService(ctx, config, logger)
-	if err != nil {
+	var err error
+	var k8sService *K8sService
+
+	if k8sService, err = ProvideK8sService(ctx, config, logger); err != nil {
 		return nil, fmt.Errorf("could not provide k8s service: %w", err)
 	}
 

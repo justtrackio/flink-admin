@@ -7,13 +7,15 @@ import (
 )
 
 func TestParseFileSummary(t *testing.T) {
+	var err error
+	var summary *CheckpointSummary
+
 	metadataPath := filepath.Join("..", "..", "_metadata")
 	if _, err := os.Stat(metadataPath); err != nil {
 		t.Skip("metadata file not found")
 	}
 
-	summary, err := ParseFileSummary(metadataPath, ParseOptions{IncludeInlineStrings: true})
-	if err != nil {
+	if summary, err = ParseFileSummary(metadataPath, ParseOptions{IncludeInlineStrings: true}); err != nil {
 		t.Fatalf("parse summary: %v", err)
 	}
 

@@ -18,8 +18,10 @@ func newBinaryReader(reader io.Reader) *binaryReader {
 
 // ReadByte reads a single byte from the stream.
 func (br *binaryReader) ReadByte() (byte, error) {
-	b, err := br.r.ReadByte()
-	if err != nil {
+	var err error
+	var b byte
+
+	if b, err = br.r.ReadByte(); err != nil {
 		return 0, fmt.Errorf("read byte: %w", err)
 	}
 
@@ -28,8 +30,10 @@ func (br *binaryReader) ReadByte() (byte, error) {
 
 // ReadBool reads a single byte and treats non-zero as true.
 func (br *binaryReader) ReadBool() (bool, error) {
-	b, err := br.ReadByte()
-	if err != nil {
+	var err error
+	var b byte
+
+	if b, err = br.ReadByte(); err != nil {
 		return false, err
 	}
 
@@ -56,8 +60,10 @@ func (br *binaryReader) ReadBytes(n int) ([]byte, error) {
 
 // ReadInt32 reads a big-endian int32 from the stream.
 func (br *binaryReader) ReadInt32() (int32, error) {
-	buf, err := br.ReadBytes(4)
-	if err != nil {
+	var err error
+	var buf []byte
+
+	if buf, err = br.ReadBytes(4); err != nil {
 		return 0, err
 	}
 
@@ -66,8 +72,10 @@ func (br *binaryReader) ReadInt32() (int32, error) {
 
 // ReadUint32 reads a big-endian uint32 from the stream.
 func (br *binaryReader) ReadUint32() (uint32, error) {
-	buf, err := br.ReadBytes(4)
-	if err != nil {
+	var err error
+	var buf []byte
+
+	if buf, err = br.ReadBytes(4); err != nil {
 		return 0, err
 	}
 
@@ -76,8 +84,10 @@ func (br *binaryReader) ReadUint32() (uint32, error) {
 
 // ReadInt64 reads a big-endian int64 from the stream.
 func (br *binaryReader) ReadInt64() (int64, error) {
-	buf, err := br.ReadBytes(8)
-	if err != nil {
+	var err error
+	var buf []byte
+
+	if buf, err = br.ReadBytes(8); err != nil {
 		return 0, err
 	}
 
@@ -86,8 +96,11 @@ func (br *binaryReader) ReadInt64() (int64, error) {
 
 // ReadUTF reads a Java modified UTF-8 string (DataOutputStream.writeUTF).
 func (br *binaryReader) ReadUTF() (string, error) {
-	length, err := br.ReadUint16()
-	if err != nil {
+	var err error
+	var length uint16
+	var buf []byte
+
+	if length, err = br.ReadUint16(); err != nil {
 		return "", fmt.Errorf("read utf length: %w", err)
 	}
 
@@ -95,8 +108,7 @@ func (br *binaryReader) ReadUTF() (string, error) {
 		return "", nil
 	}
 
-	buf, err := br.ReadBytes(int(length))
-	if err != nil {
+	if buf, err = br.ReadBytes(int(length)); err != nil {
 		return "", fmt.Errorf("read utf bytes: %w", err)
 	}
 
@@ -105,8 +117,10 @@ func (br *binaryReader) ReadUTF() (string, error) {
 
 // ReadUint16 reads a big-endian uint16 from the stream.
 func (br *binaryReader) ReadUint16() (uint16, error) {
-	buf, err := br.ReadBytes(2)
-	if err != nil {
+	var err error
+	var buf []byte
+
+	if buf, err = br.ReadBytes(2); err != nil {
 		return 0, err
 	}
 

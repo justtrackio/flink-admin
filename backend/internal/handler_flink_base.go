@@ -16,13 +16,15 @@ type flinkDeploymentHandler struct {
 }
 
 func newFlinkDeploymentHandler(ctx context.Context, config cfg.Config, logger log.Logger, channel string) (flinkDeploymentHandler, error) {
-	client, err := ProvideFlinkClient(ctx, config, logger)
-	if err != nil {
+	var err error
+	var client *FlinkClient
+	var watcher *DeploymentWatcherModule
+
+	if client, err = ProvideFlinkClient(ctx, config, logger); err != nil {
 		return flinkDeploymentHandler{}, fmt.Errorf("could not create flink client: %w", err)
 	}
 
-	watcher, err := ProvideDeploymentWatcherModule(ctx, config, logger)
-	if err != nil {
+	if watcher, err = ProvideDeploymentWatcherModule(ctx, config, logger); err != nil {
 		return flinkDeploymentHandler{}, fmt.Errorf("could not initialize deployment watcher: %w", err)
 	}
 

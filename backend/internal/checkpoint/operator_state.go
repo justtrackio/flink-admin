@@ -4,8 +4,11 @@ import "fmt"
 
 // readOperatorStateHandle parses a single operator state handle.
 func readOperatorStateHandle(br *binaryReader, parseFull bool) (*OperatorStateHandle, error) {
-	kind, err := br.ReadByte()
-	if err != nil {
+	var err error
+	var kind byte
+	var mapSize int32
+
+	if kind, err = br.ReadByte(); err != nil {
 		return nil, fmt.Errorf("read operator state handle type: %w", err)
 	}
 
@@ -18,8 +21,7 @@ func readOperatorStateHandle(br *binaryReader, parseFull bool) (*OperatorStateHa
 		return nil, fmt.Errorf("unsupported operator state handle type %d", kind)
 	}
 
-	mapSize, err := br.ReadInt32()
-	if err != nil {
+	if mapSize, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read operator state handle map size: %w", err)
 	}
 
@@ -109,10 +111,13 @@ func skipOperatorStateEntry(br *binaryReader) error {
 }
 
 func skipOffsets(br *binaryReader) error {
-	offsetCount, err := br.ReadInt32()
-	if err != nil {
+	var err error
+	var offsetCount int32
+
+	if offsetCount, err = br.ReadInt32(); err != nil {
 		return fmt.Errorf("read operator state offset count: %w", err)
 	}
+
 	if offsetCount < 0 {
 		return fmt.Errorf("operator state offset count negative: %d", offsetCount)
 	}
@@ -126,19 +131,21 @@ func skipOffsets(br *binaryReader) error {
 }
 
 func readOperatorStateEntry(br *binaryReader, h *OperatorStateHandle) error {
-	name, err := br.ReadUTF()
-	if err != nil {
+	var err error
+	var name string
+	var modeOrdinal byte
+	var offsets []int64
+
+	if name, err = br.ReadUTF(); err != nil {
 		return fmt.Errorf("read operator state name: %w", err)
 	}
 
-	modeOrdinal, err := br.ReadByte()
-	if err != nil {
+	if modeOrdinal, err = br.ReadByte(); err != nil {
 		return fmt.Errorf("read operator state mode: %w", err)
 	}
 
 	mode := distributionModeFromOrdinal(modeOrdinal)
-	offsets, err := readOffsets(br)
-	if err != nil {
+	if offsets, err = readOffsets(br); err != nil {
 		return err
 	}
 
@@ -151,20 +158,24 @@ func readOperatorStateEntry(br *binaryReader, h *OperatorStateHandle) error {
 }
 
 func readOffsets(br *binaryReader) ([]int64, error) {
-	offsetCount, err := br.ReadInt32()
-	if err != nil {
+	var err error
+	var offsetCount int32
+	var offset int64
+
+	if offsetCount, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read operator state offset count: %w", err)
 	}
+
 	if offsetCount < 0 {
 		return nil, fmt.Errorf("operator state offset count negative: %d", offsetCount)
 	}
 
 	offsets := make([]int64, offsetCount)
 	for j := int32(0); j < offsetCount; j++ {
-		offset, err := br.ReadInt64()
-		if err != nil {
+		if offset, err = br.ReadInt64(); err != nil {
 			return nil, fmt.Errorf("read operator state offset: %w", err)
 		}
+
 		offsets[j] = offset
 	}
 
@@ -172,18 +183,23 @@ func readOffsets(br *binaryReader) ([]int64, error) {
 }
 
 func readFileMergingData(br *binaryReader, h *OperatorStateHandle) error {
-	ownDir, err := br.ReadUTF()
-	if err != nil {
+	var err error
+	var ownDir string
+	var sharedDir string
+	var isEmpty bool
+
+	if ownDir, err = br.ReadUTF(); err != nil {
 		return fmt.Errorf("read operator state task owned dir: %w", err)
 	}
-	sharedDir, err := br.ReadUTF()
-	if err != nil {
+
+	if sharedDir, err = br.ReadUTF(); err != nil {
 		return fmt.Errorf("read operator state shared dir: %w", err)
 	}
-	isEmpty, err := br.ReadBool()
-	if err != nil {
+
+	if isEmpty, err = br.ReadBool(); err != nil {
 		return fmt.Errorf("read operator state empty flag: %w", err)
 	}
+
 	h.TaskOwnedDirectory = ownDir
 	h.SharedDirectory = sharedDir
 	h.IsEmptyFileMergingHandle = isEmpty
@@ -192,10 +208,13 @@ func readFileMergingData(br *binaryReader, h *OperatorStateHandle) error {
 }
 
 func readDelegateStateHandle(br *binaryReader, h *OperatorStateHandle) error {
-	delegate, err := readStreamStateHandle(br)
-	if err != nil {
+	var err error
+	var delegate *StreamStateHandle
+
+	if delegate, err = readStreamStateHandle(br); err != nil {
 		return fmt.Errorf("read operator state handle delegate: %w", err)
 	}
+
 	if delegate != nil {
 		h.DelegateState = delegate
 	}

@@ -4,9 +4,11 @@ import "fmt"
 
 // readKeyedStateHandle parses a keyed state handle, selecting the correct variant.
 func readKeyedStateHandle(br *binaryReader, parseFull bool) (KeyedStateHandle, error) {
+	var err error
+	var kind byte
+
 	_ = parseFull
-	kind, err := br.ReadByte()
-	if err != nil {
+	if kind, err = br.ReadByte(); err != nil {
 		return nil, fmt.Errorf("read keyed state handle type: %w", err)
 	}
 
@@ -32,38 +34,44 @@ func readKeyedStateHandle(br *binaryReader, parseFull bool) (KeyedStateHandle, e
 
 // readKeyGroupsHandle parses key-group based handles.
 func readKeyGroupsHandle(br *binaryReader, kind KeyedStateHandleType) (KeyedStateHandle, error) {
-	startKeyGroup, err := br.ReadInt32()
-	if err != nil {
+	var err error
+	var startKeyGroup int32
+	var count int32
+	var delegate *StreamStateHandle
+	var offset int64
+	var id string
+
+	if startKeyGroup, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read key groups start: %w", err)
 	}
-	count, err := br.ReadInt32()
-	if err != nil {
+
+	if count, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read key groups count: %w", err)
 	}
+
 	if count < 0 {
 		return nil, fmt.Errorf("key groups count negative: %d", count)
 	}
 
 	offsets := make([]int64, count)
 	for i := int32(0); i < count; i++ {
-		offset, err := br.ReadInt64()
-		if err != nil {
+		if offset, err = br.ReadInt64(); err != nil {
 			return nil, fmt.Errorf("read key groups offset: %w", err)
 		}
+
 		offsets[i] = offset
 	}
 
-	delegate, err := readStreamStateHandle(br)
-	if err != nil {
+	if delegate, err = readStreamStateHandle(br); err != nil {
 		return nil, fmt.Errorf("read key groups delegate: %w", err)
 	}
 
 	handleID := ""
 	if kind == KeyedStateHandleKeyGroupsV2 {
-		id, err := br.ReadUTF()
-		if err != nil {
+		if id, err = br.ReadUTF(); err != nil {
 			return nil, fmt.Errorf("read key groups handle id: %w", err)
 		}
+
 		handleID = id
 	}
 
@@ -81,22 +89,30 @@ func readKeyGroupsHandle(br *binaryReader, kind KeyedStateHandleType) (KeyedStat
 // Type 5 (legacy) does not have checkpointedSize or stateHandleId fields.
 // Type 11 (V2) includes both fields.
 func readIncrementalKeyGroupsHandle(br *binaryReader, kind KeyedStateHandleType) (KeyedStateHandle, error) {
+	var err error
+	var checkpointID int64
+	var backendID string
+	var startKeyGroup int32
+	var count int32
+	var metaHandle *StreamStateHandle
+	var sharedFiles []HandleAndLocalPath
+	var privateFiles []HandleAndLocalPath
+
 	isV2 := kind == KeyedStateHandleIncrementalV2
 
-	checkpointID, err := br.ReadInt64()
-	if err != nil {
+	if checkpointID, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read incremental checkpoint id: %w", err)
 	}
-	backendID, err := br.ReadUTF()
-	if err != nil {
+
+	if backendID, err = br.ReadUTF(); err != nil {
 		return nil, fmt.Errorf("read incremental backend id: %w", err)
 	}
-	startKeyGroup, err := br.ReadInt32()
-	if err != nil {
+
+	if startKeyGroup, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read incremental start key group: %w", err)
 	}
-	count, err := br.ReadInt32()
-	if err != nil {
+
+	if count, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read incremental key group count: %w", err)
 	}
 
@@ -109,18 +125,15 @@ func readIncrementalKeyGroupsHandle(br *binaryReader, kind KeyedStateHandleType)
 		}
 	}
 
-	metaHandle, err := readStreamStateHandle(br)
-	if err != nil {
+	if metaHandle, err = readStreamStateHandle(br); err != nil {
 		return nil, fmt.Errorf("read incremental meta handle: %w", err)
 	}
 
-	sharedFiles, err := readHandleAndLocalPathList(br)
-	if err != nil {
+	if sharedFiles, err = readHandleAndLocalPathList(br); err != nil {
 		return nil, fmt.Errorf("read incremental shared files: %w", err)
 	}
 
-	privateFiles, err := readHandleAndLocalPathList(br)
-	if err != nil {
+	if privateFiles, err = readHandleAndLocalPathList(br); err != nil {
 		return nil, fmt.Errorf("read incremental private files: %w", err)
 	}
 
@@ -149,24 +162,29 @@ func readIncrementalKeyGroupsHandle(br *binaryReader, kind KeyedStateHandleType)
 
 // readHandleAndLocalPathList parses a list of state handles with local paths.
 func readHandleAndLocalPathList(br *binaryReader) ([]HandleAndLocalPath, error) {
-	count, err := br.ReadInt32()
-	if err != nil {
+	var err error
+	var count int32
+	var path string
+	var handle *StreamStateHandle
+
+	if count, err = br.ReadInt32(); err != nil {
 		return nil, err
 	}
+
 	if count < 0 {
 		return nil, fmt.Errorf("handle list count negative: %d", count)
 	}
 
 	entries := make([]HandleAndLocalPath, 0, count)
 	for i := int32(0); i < count; i++ {
-		path, err := br.ReadUTF()
-		if err != nil {
+		if path, err = br.ReadUTF(); err != nil {
 			return nil, fmt.Errorf("read handle local path: %w", err)
 		}
-		handle, err := readStreamStateHandle(br)
-		if err != nil {
+
+		if handle, err = readStreamStateHandle(br); err != nil {
 			return nil, fmt.Errorf("read handle stream: %w", err)
 		}
+
 		entries = append(entries, HandleAndLocalPath{
 			LocalPath: path,
 			Handle:    handle,
@@ -180,24 +198,29 @@ func readHandleAndLocalPathList(br *binaryReader) ([]HandleAndLocalPath, error) 
 // Type 8 (legacy) does not have a separate checkpointId field; it uses materializationID.
 // Type 14 (V2) includes a separate checkpointId field.
 func readChangelogStateHandle(br *binaryReader, kind KeyedStateHandleType, parseFull bool) (KeyedStateHandle, error) {
+	var err error
+	var startKeyGroup int32
+	var numKeyGroups int32
+	var checkpointedSize int64
+	var materialized []KeyedStateHandle
+	var nonMaterialized []KeyedStateHandle
+	var materializationID int64
+	var stateID string
+
 	_ = parseFull
-	startKeyGroup, numKeyGroups, checkpointedSize, err := readChangelogHeader(br)
-	if err != nil {
+	if startKeyGroup, numKeyGroups, checkpointedSize, err = readChangelogHeader(br); err != nil {
 		return nil, err
 	}
 
-	materialized, err := readChangelogKeyedStateHandles(br, "materialized")
-	if err != nil {
+	if materialized, err = readChangelogKeyedStateHandles(br, "materialized"); err != nil {
 		return nil, err
 	}
 
-	nonMaterialized, err := readChangelogKeyedStateHandles(br, "non materialized")
-	if err != nil {
+	if nonMaterialized, err = readChangelogKeyedStateHandles(br, "non materialized"); err != nil {
 		return nil, err
 	}
 
-	materializationID, err := br.ReadInt64()
-	if err != nil {
+	if materializationID, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read changelog materialization id: %w", err)
 	}
 
@@ -209,8 +232,7 @@ func readChangelogStateHandle(br *binaryReader, kind KeyedStateHandleType, parse
 		}
 	}
 
-	stateID, err := br.ReadUTF()
-	if err != nil {
+	if stateID, err = br.ReadUTF(); err != nil {
 		return nil, fmt.Errorf("read changelog handle id: %w", err)
 	}
 
@@ -228,14 +250,16 @@ func readChangelogStateHandle(br *binaryReader, kind KeyedStateHandleType, parse
 }
 
 func readChangelogHeader(br *binaryReader) (startKeyGroup int32, numKeyGroups int32, checkpointedSize int64, err error) {
+	var count int32
+
 	startKeyGroup, err = br.ReadInt32()
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("read changelog start key group: %w", err)
 	}
-	count, err := br.ReadInt32()
-	if err != nil {
+	if count, err = br.ReadInt32(); err != nil {
 		return 0, 0, 0, fmt.Errorf("read changelog key group count: %w", err)
 	}
+
 	checkpointedSize, err = br.ReadInt64()
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("read changelog checkpointed size: %w", err)
@@ -245,20 +269,24 @@ func readChangelogHeader(br *binaryReader) (startKeyGroup int32, numKeyGroups in
 }
 
 func readChangelogKeyedStateHandles(br *binaryReader, label string) ([]KeyedStateHandle, error) {
-	count, err := br.ReadInt32()
-	if err != nil {
+	var err error
+	var count int32
+	var handle KeyedStateHandle
+
+	if count, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read changelog %s count: %w", label, err)
 	}
+
 	if count < 0 {
 		return nil, fmt.Errorf("changelog %s count negative: %d", label, count)
 	}
 
 	handles := make([]KeyedStateHandle, 0, count)
 	for i := int32(0); i < count; i++ {
-		handle, err := readKeyedStateHandle(br, true)
-		if err != nil {
+		if handle, err = readKeyedStateHandle(br, true); err != nil {
 			return nil, fmt.Errorf("read changelog %s handle: %w", label, err)
 		}
+
 		if handle != nil {
 			handles = append(handles, handle)
 		}
@@ -269,40 +297,51 @@ func readChangelogKeyedStateHandles(br *binaryReader, label string) ([]KeyedStat
 
 // readChangelogByteIncrementHandle parses in-memory changelog increments.
 func readChangelogByteIncrementHandle(br *binaryReader, kind KeyedStateHandleType, parseFull bool) (KeyedStateHandle, error) {
-	startKeyGroup, err := br.ReadInt32()
-	if err != nil {
+	var err error
+	var startKeyGroup int32
+	var count int32
+	var fromSeq int64
+	var toSeq int64
+	var changesCount int32
+	var stateID string
+	var keyGroup int32
+	var length int32
+	var data []byte
+
+	if startKeyGroup, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read changelog byte start key group: %w", err)
 	}
-	count, err := br.ReadInt32()
-	if err != nil {
+
+	if count, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read changelog byte key group count: %w", err)
 	}
-	fromSeq, err := br.ReadInt64()
-	if err != nil {
+
+	if fromSeq, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read changelog byte from seq: %w", err)
 	}
-	toSeq, err := br.ReadInt64()
-	if err != nil {
+
+	if toSeq, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read changelog byte to seq: %w", err)
 	}
-	changesCount, err := br.ReadInt32()
-	if err != nil {
+
+	if changesCount, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read changelog byte changes count: %w", err)
 	}
+
 	if changesCount < 0 {
 		return nil, fmt.Errorf("changelog byte changes count negative: %d", changesCount)
 	}
 
 	changes := make([]ChangelogStateChange, 0, changesCount)
 	for i := int32(0); i < changesCount; i++ {
-		keyGroup, err := br.ReadInt32()
-		if err != nil {
+		if keyGroup, err = br.ReadInt32(); err != nil {
 			return nil, fmt.Errorf("read changelog byte key group: %w", err)
 		}
-		length, err := br.ReadInt32()
-		if err != nil {
+
+		if length, err = br.ReadInt32(); err != nil {
 			return nil, fmt.Errorf("read changelog byte length: %w", err)
 		}
+
 		if !parseFull {
 			if _, err := br.ReadBytes(int(length)); err != nil {
 				return nil, fmt.Errorf("read changelog byte data: %w", err)
@@ -310,18 +349,17 @@ func readChangelogByteIncrementHandle(br *binaryReader, kind KeyedStateHandleTyp
 
 			continue
 		}
-		data, err := br.ReadBytes(int(length))
-		if err != nil {
+		if data, err = br.ReadBytes(int(length)); err != nil {
 			return nil, fmt.Errorf("read changelog byte data: %w", err)
 		}
+
 		changes = append(changes, ChangelogStateChange{
 			KeyGroup: keyGroup,
 			Data:     data,
 		})
 	}
 
-	stateID, err := br.ReadUTF()
-	if err != nil {
+	if stateID, err = br.ReadUTF(); err != nil {
 		return nil, fmt.Errorf("read changelog byte handle id: %w", err)
 	}
 
@@ -340,50 +378,59 @@ func readChangelogByteIncrementHandle(br *binaryReader, kind KeyedStateHandleTyp
 // Type 10 (legacy) does not have a storageIdentifier field; it defaults to "filesystem".
 // Type 13 (V2) includes the storageIdentifier field.
 func readChangelogFileIncrementHandle(br *binaryReader, kind KeyedStateHandleType) (KeyedStateHandle, error) {
+	var err error
+	var startKeyGroup int32
+	var count int32
+	var streamCount int32
+	var stateSize int64
+	var checkpointedSize int64
+	var stateID string
+	var offset int64
+	var handle *StreamStateHandle
+
 	isV2 := kind == KeyedStateHandleChangelogFileV2
 
-	startKeyGroup, err := br.ReadInt32()
-	if err != nil {
+	if startKeyGroup, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read changelog file start key group: %w", err)
 	}
-	count, err := br.ReadInt32()
-	if err != nil {
+
+	if count, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read changelog file key group count: %w", err)
 	}
-	streamCount, err := br.ReadInt32()
-	if err != nil {
+
+	if streamCount, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read changelog file stream count: %w", err)
 	}
+
 	if streamCount < 0 {
 		return nil, fmt.Errorf("changelog file stream count negative: %d", streamCount)
 	}
 
 	offsets := make([]ChangelogStreamOffset, 0, streamCount)
 	for i := int32(0); i < streamCount; i++ {
-		offset, err := br.ReadInt64()
-		if err != nil {
+		if offset, err = br.ReadInt64(); err != nil {
 			return nil, fmt.Errorf("read changelog file offset: %w", err)
 		}
-		handle, err := readStreamStateHandle(br)
-		if err != nil {
+
+		if handle, err = readStreamStateHandle(br); err != nil {
 			return nil, fmt.Errorf("read changelog file handle: %w", err)
 		}
+
 		offsets = append(offsets, ChangelogStreamOffset{
 			Offset: offset,
 			Handle: handle,
 		})
 	}
 
-	stateSize, err := br.ReadInt64()
-	if err != nil {
+	if stateSize, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read changelog file state size: %w", err)
 	}
-	checkpointedSize, err := br.ReadInt64()
-	if err != nil {
+
+	if checkpointedSize, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read changelog file checkpointed size: %w", err)
 	}
-	stateID, err := br.ReadUTF()
-	if err != nil {
+
+	if stateID, err = br.ReadUTF(); err != nil {
 		return nil, fmt.Errorf("read changelog file handle id: %w", err)
 	}
 

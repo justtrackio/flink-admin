@@ -4,8 +4,10 @@ import "fmt"
 
 // readStreamStateHandle parses a stream state handle from the binary stream.
 func readStreamStateHandle(br *binaryReader) (*StreamStateHandle, error) {
-	kind, err := br.ReadByte()
-	if err != nil {
+	var err error
+	var kind byte
+
+	if kind, err = br.ReadByte(); err != nil {
 		return nil, fmt.Errorf("read stream state handle type: %w", err)
 	}
 
@@ -29,18 +31,20 @@ func readStreamStateHandle(br *binaryReader) (*StreamStateHandle, error) {
 }
 
 func readByteStreamHandle(br *binaryReader, h *StreamStateHandle) (*StreamStateHandle, error) {
-	name, err := br.ReadUTF()
-	if err != nil {
+	var err error
+	var name string
+	var length int32
+	var data []byte
+
+	if name, err = br.ReadUTF(); err != nil {
 		return nil, fmt.Errorf("read byte stream handle name: %w", err)
 	}
 
-	length, err := br.ReadInt32()
-	if err != nil {
+	if length, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read byte stream handle length: %w", err)
 	}
 
-	data, err := br.ReadBytes(int(length))
-	if err != nil {
+	if data, err = br.ReadBytes(int(length)); err != nil {
 		return nil, fmt.Errorf("read byte stream handle data: %w", err)
 	}
 
@@ -52,14 +56,18 @@ func readByteStreamHandle(br *binaryReader, h *StreamStateHandle) (*StreamStateH
 }
 
 func readFileStreamHandle(br *binaryReader, h *StreamStateHandle) (*StreamStateHandle, error) {
-	size, err := br.ReadInt64()
-	if err != nil {
+	var err error
+	var size int64
+	var path string
+
+	if size, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read file handle size: %w", err)
 	}
-	path, err := br.ReadUTF()
-	if err != nil {
+
+	if path, err = br.ReadUTF(); err != nil {
 		return nil, fmt.Errorf("read file handle path: %w", err)
 	}
+
 	h.Size = size
 	h.Path = path
 
@@ -67,14 +75,18 @@ func readFileStreamHandle(br *binaryReader, h *StreamStateHandle) (*StreamStateH
 }
 
 func readRelativeStreamHandle(br *binaryReader, h *StreamStateHandle) (*StreamStateHandle, error) {
-	path, err := br.ReadUTF()
-	if err != nil {
+	var err error
+	var path string
+	var size int64
+
+	if path, err = br.ReadUTF(); err != nil {
 		return nil, fmt.Errorf("read relative handle path: %w", err)
 	}
-	size, err := br.ReadInt64()
-	if err != nil {
+
+	if size, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read relative handle size: %w", err)
 	}
+
 	h.Path = path
 	h.Size = size
 
@@ -82,26 +94,33 @@ func readRelativeStreamHandle(br *binaryReader, h *StreamStateHandle) (*StreamSt
 }
 
 func readSegmentStreamHandle(br *binaryReader, h *StreamStateHandle) (*StreamStateHandle, error) {
-	start, err := br.ReadInt64()
-	if err != nil {
+	var err error
+	var start int64
+	var size int64
+	var scope int32
+	var path string
+	var logicalID string
+
+	if start, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read segment handle start: %w", err)
 	}
-	size, err := br.ReadInt64()
-	if err != nil {
+
+	if size, err = br.ReadInt64(); err != nil {
 		return nil, fmt.Errorf("read segment handle size: %w", err)
 	}
-	scope, err := br.ReadInt32()
-	if err != nil {
+
+	if scope, err = br.ReadInt32(); err != nil {
 		return nil, fmt.Errorf("read segment handle scope: %w", err)
 	}
-	path, err := br.ReadUTF()
-	if err != nil {
+
+	if path, err = br.ReadUTF(); err != nil {
 		return nil, fmt.Errorf("read segment handle path: %w", err)
 	}
-	logicalID, err := br.ReadUTF()
-	if err != nil {
+
+	if logicalID, err = br.ReadUTF(); err != nil {
 		return nil, fmt.Errorf("read segment handle logical id: %w", err)
 	}
+
 	h.StartPos = start
 	h.Size = size
 	h.Scope = scope
