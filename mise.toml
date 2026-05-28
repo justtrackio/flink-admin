@@ -55,3 +55,13 @@ mise run ci:backend-test
 mise run ci:frontend-lint
 mise run ci:frontend-build
 """
+
+[hooks]
+# mise enter hook: keep codegraph index fresh
+enter = """
+  command -v codegraph >/dev/null 2>&1 || exit 0
+  if [ ! -f .codegraph/codegraph.db ]; then
+    codegraph init -i
+  fi
+  codegraph sync
+"""

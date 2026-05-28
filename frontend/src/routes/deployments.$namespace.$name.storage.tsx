@@ -37,6 +37,12 @@ export const Route = createFileRoute('/deployments/$namespace/$name/storage')({
 function DeploymentStorageComponent() {
   const { namespace, name } = Route.useParams();
   const storageCheckpoints = useStorageCheckpoints(namespace, name);
+  const stateEntries = [...(storageCheckpoints.data?.stateEntries ?? [])].sort((a, b) => {
+    const aTime = a.lastModified ? new Date(a.lastModified).getTime() : 0;
+    const bTime = b.lastModified ? new Date(b.lastModified).getTime() : 0;
+
+    return bTime - aTime;
+  });
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -72,14 +78,9 @@ function DeploymentStorageComponent() {
         {storageCheckpoints.data && (
           <>
             {/* Configuration Info */}
-            {(storageCheckpoints.data.jobId || storageCheckpoints.data.checkpointDir || storageCheckpoints.data.savepointDir) && (
+            {(storageCheckpoints.data.checkpointDir || storageCheckpoints.data.savepointDir) && (
               <Card title="Configuration" size="small" style={{ marginBottom: '16px' }}>
                 <Descriptions column={1} size="small">
-                  {storageCheckpoints.data.jobId && (
-                    <Descriptions.Item label="Current Job ID">
-                      <code style={{ fontSize: '12px' }}>{storageCheckpoints.data.jobId}</code>
-                    </Descriptions.Item>
-                  )}
                   {storageCheckpoints.data.checkpointDir && (
                     <Descriptions.Item label="Checkpoint Directory">
                       <code style={{ fontSize: '12px' }}>{storageCheckpoints.data.checkpointDir}</code>
@@ -94,11 +95,11 @@ function DeploymentStorageComponent() {
               </Card>
             )}
 
-            {/* Checkpoints Table */}
-            {storageCheckpoints.data.checkpoints && storageCheckpoints.data.checkpoints.length > 0 && (
-              <Card title="Checkpoints in Storage" size="small" style={{ marginBottom: '16px' }}>
+            {/* State Entries Table */}
+            {stateEntries.length > 0 && (
+              <Card title="Checkpoints & Savepoints in Storage" size="small">
                 <Table
-                  dataSource={storageCheckpoints.data.checkpoints}
+                  dataSource={stateEntries}
                   columns={[
                     {
                       title: 'Name',
@@ -113,7 +114,7 @@ function DeploymentStorageComponent() {
                       width: 300,
                       render: (jobId?: string) => jobId ? (
                         <code style={{ fontSize: '11px' }}>{jobId}</code>
-                      ) : 'N/A',
+                      ) : '-',
                     },
                     {
                       title: 'Last Modified',
@@ -144,60 +145,26 @@ function DeploymentStorageComponent() {
                       render: (path: string) => <code style={{ fontSize: '11px' }}>{path}</code>,
                     },
                   ]}
-                  rowKey={(record) => `${record.jobId}-${record.name}`}
+                  rowKey={(record) => `${record.type}-${record.jobId ?? ''}-${record.name}-${record.path}`}
                   size="small"
                   pagination={{
                     defaultPageSize: 50,
                     showSizeChanger: true,
-                    showTotal: (total) => `Total ${total} checkpoints`,
-                  }}
-                />
-              </Card>
-            )}
-
-            {/* Savepoints Table */}
-            {storageCheckpoints.data.savepoints && storageCheckpoints.data.savepoints.length > 0 && (
-              <Card title="Savepoints in Storage" size="small">
-                <Table
-                  dataSource={storageCheckpoints.data.savepoints}
-                  columns={[
-                    {
-                      title: 'Name',
-                      dataIndex: 'name',
-                      key: 'name',
-                      width: 200,
-                    },
-                    {
-                      title: 'S3 Path',
-                      dataIndex: 'path',
-                      key: 'path',
-                      ellipsis: true,
-                      render: (path: string) => <code style={{ fontSize: '12px' }}>{path}</code>,
-                    },
-                  ]}
-                  rowKey="name"
-                  size="small"
-                  pagination={{
-                    defaultPageSize: 50,
-                    showSizeChanger: true,
-                    showTotal: (total) => `Total ${total} savepoints`,
+                    showTotal: (total) => `Total ${total} state entries`,
                   }}
                 />
               </Card>
             )}
 
             {/* No data message */}
-            {(!storageCheckpoints.data.checkpoints || storageCheckpoints.data.checkpoints.length === 0) && 
-             (!storageCheckpoints.data.savepoints || storageCheckpoints.data.savepoints.length === 0) && (
+            {stateEntries.length === 0 && (
               <Alert
                 type="info"
                 message="No Storage Data Found"
                 description={
-                  !storageCheckpoints.data.jobId
-                    ? 'No active job found. Storage checkpoints are filtered by the current job ID.'
-                    : !storageCheckpoints.data.checkpointDir && !storageCheckpoints.data.savepointDir
+                  !storageCheckpoints.data.checkpointDir && !storageCheckpoints.data.savepointDir
                     ? 'No checkpoint or savepoint directories configured in flinkConfiguration (execution.checkpointing.dir or execution.checkpointing.savepoint-dir)'
-                    : `No checkpoints or savepoints found for the current job (${storageCheckpoints.data.jobId}) in the configured storage directories`
+                    : 'No checkpoints or savepoints found in the configured storage directories'
                 }
                 showIcon
               />

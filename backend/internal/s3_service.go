@@ -19,7 +19,6 @@ import (
 type s3ServiceCtxKey struct{}
 
 type S3Service struct {
-	logger   log.Logger
 	s3Client *s3.Client
 }
 
@@ -33,13 +32,18 @@ func ProvideS3Service(ctx context.Context, config cfg.Config, logger log.Logger)
 		}
 
 		return &S3Service{
-			logger:   logger.WithChannel("s3_service"),
 			s3Client: s3Client,
 		}, nil
 	})
 }
 
 type StorageEntry struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+type StateEntry struct {
+	Type         string     `json:"type"`
 	Name         string     `json:"name"`
 	Path         string     `json:"path"`
 	JobId        string     `json:"jobId,omitempty"`
@@ -143,8 +147,6 @@ func (s *S3Service) ListStorageCheckpoints(ctx context.Context, s3URI string) ([
 		return nil, fmt.Errorf("failed to parse S3 URI: %w", err)
 	}
 
-	s.logger.Info(ctx, "listing checkpoints in s3://%s/%s", bucket, prefix)
-
 	if names, err = s.listCommonPrefixNames(ctx, bucket, prefix); err != nil {
 		return nil, err
 	}
@@ -156,8 +158,6 @@ func (s *S3Service) ListStorageCheckpoints(ctx context.Context, s3URI string) ([
 			Path: "s3://" + bucket + "/" + prefix + name + "/",
 		})
 	}
-
-	s.logger.Info(ctx, "found %d checkpoint/savepoint directories", len(entries))
 
 	return entries, nil
 }
@@ -178,13 +178,9 @@ func (s *S3Service) ListJobDirectories(ctx context.Context, s3URI string) ([]str
 		return nil, fmt.Errorf("failed to parse S3 URI: %w", err)
 	}
 
-	s.logger.Info(ctx, "listing job directories in s3://%s/%s", bucket, prefix)
-
 	if jobIds, err = s.listCommonPrefixNames(ctx, bucket, prefix); err != nil {
 		return nil, err
 	}
-
-	s.logger.Info(ctx, "found %d job directories", len(jobIds))
 
 	return jobIds, nil
 }
@@ -211,8 +207,6 @@ func (s *S3Service) GetMetadataInfo(ctx context.Context, s3URI string) (*Metadat
 	}
 	metadataKey += "_metadata"
 
-	s.logger.Debug(ctx, "checking for metadata file: s3://%s/%s", bucket, metadataKey)
-
 	// Use HeadObject to check if the _metadata file exists
 	input := &s3.HeadObjectInput{
 		Bucket: &bucket,
@@ -236,13 +230,13 @@ func (s *S3Service) GetMetadataInfo(ctx context.Context, s3URI string) (*Metadat
 }
 
 // ListValidCheckpoints lists all valid checkpoints (chk-* with _metadata) for a given job ID
-func (s *S3Service) ListValidCheckpoints(ctx context.Context, checkpointBasePath string, jobId string) ([]StorageEntry, error) {
+func (s *S3Service) ListValidCheckpoints(ctx context.Context, checkpointBasePath string, jobId string) ([]StateEntry, error) {
 	var err error
 	var allCheckpoints []StorageEntry
 	var metadataInfo *MetadataInfo
 
 	if checkpointBasePath == "" || jobId == "" {
-		return []StorageEntry{}, nil
+		return []StateEntry{}, nil
 	}
 
 	// Construct job-specific checkpoint path
@@ -252,15 +246,13 @@ func (s *S3Service) ListValidCheckpoints(ctx context.Context, checkpointBasePath
 	}
 	jobPath += jobId
 
-	s.logger.Info(ctx, "listing valid checkpoints for job %s in %s", jobId, jobPath)
-
 	// First, list all checkpoint directories (chk-*)
 	if allCheckpoints, err = s.ListStorageCheckpoints(ctx, jobPath); err != nil {
 		return nil, fmt.Errorf("failed to list checkpoints for job %s: %w", jobId, err)
 	}
 
 	// Filter checkpoints that start with "chk-" and have _metadata file
-	var validCheckpoints []StorageEntry
+	var validCheckpoints []StateEntry
 	for _, checkpoint := range allCheckpoints {
 		if !strings.HasPrefix(checkpoint.Name, "chk-") {
 			continue
@@ -268,20 +260,22 @@ func (s *S3Service) ListValidCheckpoints(ctx context.Context, checkpointBasePath
 
 		// Get metadata file info
 		if metadataInfo, err = s.GetMetadataInfo(ctx, checkpoint.Path); err != nil {
-			s.logger.Warn(ctx, "failed to check metadata for %s: %v", checkpoint.Path, err)
+			return nil, fmt.Errorf("failed to get metadata for checkpoint %s: %w", checkpoint.Path, err)
+		}
 
+		if !metadataInfo.Exists {
 			continue
 		}
 
-		if metadataInfo.Exists {
-			checkpoint.JobId = jobId
-			checkpoint.LastModified = metadataInfo.LastModified
-			checkpoint.Size = metadataInfo.Size
-			validCheckpoints = append(validCheckpoints, checkpoint)
-		}
+		validCheckpoints = append(validCheckpoints, StateEntry{
+			Type:         "checkpoint",
+			Name:         checkpoint.Name,
+			Path:         checkpoint.Path,
+			JobId:        jobId,
+			LastModified: metadataInfo.LastModified,
+			Size:         metadataInfo.Size,
+		})
 	}
-
-	s.logger.Info(ctx, "found %d valid checkpoints for job %s", len(validCheckpoints), jobId)
 
 	return validCheckpoints, nil
 }

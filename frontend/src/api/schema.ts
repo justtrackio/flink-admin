@@ -161,6 +161,7 @@ export interface FlinkCheckpointStatistics {
 // S3 Storage Checkpoint Types
 
 export interface StorageEntry {
+  type: string;
   name: string;
   path: string;
   jobId?: string;
@@ -169,11 +170,9 @@ export interface StorageEntry {
 }
 
 export interface StorageCheckpointsResponse {
-  jobId?: string;
   checkpointDir?: string;
   savepointDir?: string;
-  checkpoints: StorageEntry[];
-  savepoints: StorageEntry[];
+  stateEntries: StorageEntry[];
 }
 
 // Kubernetes Event Types (events.k8s.io/v1)
