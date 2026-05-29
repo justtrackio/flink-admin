@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -55,6 +56,27 @@ type MetadataInfo struct {
 	Exists       bool
 	LastModified *time.Time
 	Size         *int64
+}
+
+func buildMetadataS3URI(s3URI string) (string, error) {
+	var err error
+	var bucket string
+	var prefix string
+
+	if bucket, prefix, err = parseS3URI(s3URI); err != nil {
+		return "", err
+	}
+
+	return "s3://" + bucket + "/" + buildMetadataKey(prefix), nil
+}
+
+func buildMetadataKey(prefix string) string {
+	metadataKey := prefix
+	if !strings.HasSuffix(metadataKey, "/") {
+		metadataKey += "/"
+	}
+
+	return metadataKey + "_metadata"
 }
 
 // parseS3URI parses an S3 URI like "s3://bucket/prefix/path" into bucket and prefix
@@ -200,12 +222,7 @@ func (s *S3Service) GetMetadataInfo(ctx context.Context, s3URI string) (*Metadat
 		return nil, fmt.Errorf("failed to parse S3 URI: %w", err)
 	}
 
-	// Ensure prefix ends with _metadata
-	metadataKey := prefix
-	if !strings.HasSuffix(metadataKey, "/") {
-		metadataKey += "/"
-	}
-	metadataKey += "_metadata"
+	metadataKey := buildMetadataKey(prefix)
 
 	// Use HeadObject to check if the _metadata file exists
 	input := &s3.HeadObjectInput{
@@ -227,6 +244,33 @@ func (s *S3Service) GetMetadataInfo(ctx context.Context, s3URI string) (*Metadat
 		LastModified: result.LastModified,
 		Size:         result.ContentLength,
 	}, nil
+}
+
+func (s *S3Service) OpenMetadata(ctx context.Context, s3URI string) (io.ReadCloser, error) {
+	var err error
+	var bucket string
+	var prefix string
+	var result *s3.GetObjectOutput
+
+	if s3URI == "" {
+		return nil, fmt.Errorf("s3 URI is empty")
+	}
+
+	if bucket, prefix, err = parseS3URI(s3URI); err != nil {
+		return nil, fmt.Errorf("failed to parse S3 URI: %w", err)
+	}
+
+	metadataKey := buildMetadataKey(prefix)
+	input := &s3.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &metadataKey,
+	}
+
+	if result, err = s.s3Client.GetObject(ctx, input); err != nil {
+		return nil, fmt.Errorf("failed to get metadata object for s3://%s/%s: %w", bucket, metadataKey, err)
+	}
+
+	return result.Body, nil
 }
 
 // ListValidCheckpoints lists all valid checkpoints (chk-* with _metadata) for a given job ID
@@ -268,7 +312,7 @@ func (s *S3Service) ListValidCheckpoints(ctx context.Context, checkpointBasePath
 		}
 
 		validCheckpoints = append(validCheckpoints, StateEntry{
-			Type:         "checkpoint",
+			Type:         StateTypeCheckpoint,
 			Name:         checkpoint.Name,
 			Path:         checkpoint.Path,
 			JobId:        jobId,

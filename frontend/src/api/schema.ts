@@ -175,6 +175,45 @@ export interface StorageCheckpointsResponse {
   stateEntries: StorageEntry[];
 }
 
+export interface StorageCheckpointOperatorSummary {
+  name: string;
+  uid: string;
+  operatorId: string;
+  parallelism: number;
+  maxParallelism: number;
+}
+
+export interface StorageCheckpointPropertiesSummary {
+  checkpointType?: string;
+  sharingStrategy?: string;
+  source?: string;
+}
+
+export interface StorageCheckpointMetadataSummary {
+  version: number;
+  checkpointId: number;
+  numOperators: number;
+  operators: StorageCheckpointOperatorSummary[];
+  stateFilePaths: string[];
+  properties?: StorageCheckpointPropertiesSummary;
+}
+
+export type StorageCheckpointParseStatus = 'missing' | 'failed' | 'parsed';
+
+export interface StorageCheckpointMetadataResponse {
+  type: string;
+  name: string;
+  path: string;
+  metadataPath: string;
+  jobId?: string;
+  metadataExists: boolean;
+  lastModified?: string;
+  size?: number;
+  parseStatus: StorageCheckpointParseStatus;
+  parseError?: string;
+  summary?: StorageCheckpointMetadataSummary;
+}
+
 // Kubernetes Event Types (events.k8s.io/v1)
 
 export interface K8sEvent {

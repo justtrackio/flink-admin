@@ -2,12 +2,24 @@ package internal
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"strings"
+	"time"
 
 	"github.com/gosoline-project/httpserver"
+	"github.com/justtrackio/flink-admin/internal/checkpoint"
 	"github.com/justtrackio/gosoline/pkg/cfg"
 	"github.com/justtrackio/gosoline/pkg/log"
 	"github.com/justtrackio/gosoline/pkg/mapx"
+)
+
+const (
+	ParseStatusFailed   = "failed"
+	ParseStatusParsed   = "parsed"
+	StateTypeCheckpoint = "checkpoint"
+	StateTypeSavepoint  = "savepoint"
 )
 
 func NewHandlerStorageCheckpoints(ctx context.Context, config cfg.Config, logger log.Logger) (*HandlerStorageCheckpoints, error) {
@@ -41,10 +53,55 @@ type GetStorageCheckpointsRequest struct {
 	Name      string `uri:"name"`
 }
 
+type GetStorageCheckpointMetadataRequest struct {
+	Namespace string `uri:"namespace"`
+	Name      string `uri:"name"`
+	EntryType string `uri:"entryType"`
+	JobId     string `uri:"jobId"`
+	EntryName string `uri:"entryName"`
+}
+
 type StorageCheckpointsResponse struct {
 	CheckpointDir string       `json:"checkpointDir,omitempty"`
 	SavepointDir  string       `json:"savepointDir,omitempty"`
 	StateEntries  []StateEntry `json:"stateEntries"`
+}
+
+type StorageCheckpointMetadataResponse struct {
+	Type           string                            `json:"type"`
+	Name           string                            `json:"name"`
+	Path           string                            `json:"path"`
+	MetadataPath   string                            `json:"metadataPath"`
+	JobId          string                            `json:"jobId,omitempty"`
+	MetadataExists bool                              `json:"metadataExists"`
+	LastModified   *time.Time                        `json:"lastModified,omitempty"`
+	Size           *int64                            `json:"size,omitempty"`
+	ParseStatus    string                            `json:"parseStatus"`
+	ParseError     string                            `json:"parseError,omitempty"`
+	Summary        *StorageCheckpointMetadataSummary `json:"summary,omitempty"`
+}
+
+type StorageCheckpointMetadataSummary struct {
+	Version        int32                               `json:"version"`
+	CheckpointID   int64                               `json:"checkpointId"`
+	NumOperators   int                                 `json:"numOperators"`
+	Operators      []StorageCheckpointOperatorSummary  `json:"operators"`
+	StateFilePaths []string                            `json:"stateFilePaths"`
+	Properties     *StorageCheckpointPropertiesSummary `json:"properties,omitempty"`
+}
+
+type StorageCheckpointOperatorSummary struct {
+	Name           string `json:"name"`
+	UID            string `json:"uid"`
+	OperatorID     string `json:"operatorId"`
+	Parallelism    int32  `json:"parallelism"`
+	MaxParallelism int32  `json:"maxParallelism"`
+}
+
+type StorageCheckpointPropertiesSummary struct {
+	CheckpointType  string `json:"checkpointType,omitempty"`
+	SharingStrategy string `json:"sharingStrategy,omitempty"`
+	Source          string `json:"source,omitempty"`
 }
 
 func (h *HandlerStorageCheckpoints) GetStorageCheckpoints(ctx context.Context, request *GetStorageCheckpointsRequest) (httpserver.Response, error) {
@@ -79,6 +136,102 @@ func (h *HandlerStorageCheckpoints) GetStorageCheckpoints(ctx context.Context, r
 			return nil, fmt.Errorf("failed to list savepoints: %v", err)
 		}
 	}
+
+	return httpserver.NewJsonResponse(response), nil
+}
+
+func (h *HandlerStorageCheckpoints) GetStorageCheckpointMetadata(ctx context.Context, request *GetStorageCheckpointMetadataRequest) (httpserver.Response, error) {
+	var err error
+	var statePath string
+	var metadataPath string
+	var metadataInfo *MetadataInfo
+	var metadataReader io.ReadCloser
+	var summary *checkpoint.CheckpointSummary
+
+	deployment, exists := h.watcher.GetDeployment(request.Namespace, request.Name)
+	if !exists {
+		return nil, fmt.Errorf("deployment %s/%s not found", request.Namespace, request.Name)
+	}
+
+	if err := validateStorageEntryRequest(request); err != nil {
+		return nil, fmt.Errorf("invalid request: %w", err)
+	}
+
+	flinkConfig := mapx.NewMapX(deployment.Spec.FlinkConfiguration)
+	if flinkConfig == nil {
+		return nil, fmt.Errorf("flink configuration is missing")
+	}
+
+	switch request.EntryType {
+	case StateTypeCheckpoint:
+		checkpointBaseDir := flinkConfig.Get("execution.checkpointing.dir").Data()
+		checkpointDir, ok := checkpointBaseDir.(string)
+		if !ok || checkpointDir == "" {
+			return nil, fmt.Errorf("checkpoint directory is not configured")
+		}
+
+		statePath = joinS3Path(checkpointDir, request.JobId, request.EntryName)
+	case StateTypeSavepoint:
+		savepointBaseDir := flinkConfig.Get("execution.checkpointing.savepoint-dir").Data()
+		savepointDir, ok := savepointBaseDir.(string)
+		if !ok || savepointDir == "" {
+			return nil, fmt.Errorf("savepoint directory is not configured")
+		}
+
+		statePath = joinS3Path(savepointDir, request.EntryName)
+	default:
+		return nil, fmt.Errorf("unsupported storage entry type: %s", request.EntryType)
+	}
+
+	if metadataPath, err = buildMetadataS3URI(statePath); err != nil {
+		return nil, fmt.Errorf("failed to build metadata path: %w", err)
+	}
+
+	if metadataInfo, err = h.s3Service.GetMetadataInfo(ctx, statePath); err != nil {
+		return nil, fmt.Errorf("failed to get metadata info: %w", err)
+	}
+
+	response := StorageCheckpointMetadataResponse{
+		Type:           request.EntryType,
+		Name:           request.EntryName,
+		Path:           statePath,
+		MetadataPath:   metadataPath,
+		MetadataExists: metadataInfo.Exists,
+		LastModified:   metadataInfo.LastModified,
+		Size:           metadataInfo.Size,
+		ParseStatus:    "missing",
+	}
+
+	if request.EntryType == StateTypeCheckpoint {
+		response.JobId = request.JobId
+	}
+
+	if !metadataInfo.Exists {
+		return httpserver.NewJsonResponse(response), nil
+	}
+
+	if metadataReader, err = h.s3Service.OpenMetadata(ctx, statePath); err != nil {
+		response.ParseStatus = ParseStatusFailed
+		response.ParseError = err.Error()
+
+		return httpserver.NewJsonResponse(response), nil
+	}
+
+	defer func() {
+		if cerr := metadataReader.Close(); cerr != nil {
+			h.logger.Warn(ctx, "failed to close metadata reader for %s: %v", statePath, cerr)
+		}
+	}()
+
+	if summary, err = checkpoint.ParseSummary(metadataReader, checkpoint.ParseOptions{IncludeInlineStrings: true}); err != nil {
+		response.ParseStatus = ParseStatusFailed
+		response.ParseError = err.Error()
+
+		return httpserver.NewJsonResponse(response), nil
+	}
+
+	response.ParseStatus = ParseStatusParsed
+	response.Summary = buildStorageCheckpointMetadataSummary(summary)
 
 	return httpserver.NewJsonResponse(response), nil
 }
@@ -125,7 +278,7 @@ func (h *HandlerStorageCheckpoints) populateSavepoints(ctx context.Context, save
 		}
 
 		response.StateEntries = append(response.StateEntries, StateEntry{
-			Type:         "savepoint",
+			Type:         StateTypeSavepoint,
 			Name:         savepoint.Name,
 			Path:         savepoint.Path,
 			JobId:        "",
@@ -135,4 +288,62 @@ func (h *HandlerStorageCheckpoints) populateSavepoints(ctx context.Context, save
 	}
 
 	return nil
+}
+
+func validateStorageEntryRequest(request *GetStorageCheckpointMetadataRequest) error {
+	if request.EntryName == "" || hasPathSeparator(request.EntryName) || request.EntryName == "." || request.EntryName == ".." {
+		return fmt.Errorf("invalid storage entry name: %s", request.EntryName)
+	}
+
+	if request.EntryType == StateTypeCheckpoint {
+		if request.JobId == "" || request.JobId == "-" || hasPathSeparator(request.JobId) || request.JobId == "." || request.JobId == ".." {
+			return fmt.Errorf("invalid checkpoint job id: %s", request.JobId)
+		}
+	}
+
+	return nil
+}
+
+func hasPathSeparator(value string) bool {
+	return strings.Contains(value, "/") || strings.Contains(value, "\\")
+}
+
+func joinS3Path(base string, parts ...string) string {
+	path := strings.TrimRight(base, "/")
+	for _, part := range parts {
+		path += "/" + strings.Trim(part, "/")
+	}
+
+	return path
+}
+
+func buildStorageCheckpointMetadataSummary(summary *checkpoint.CheckpointSummary) *StorageCheckpointMetadataSummary {
+	operators := make([]StorageCheckpointOperatorSummary, 0, len(summary.Operators))
+	for _, operator := range summary.Operators {
+		operators = append(operators, StorageCheckpointOperatorSummary{
+			Name:           operator.Name,
+			UID:            operator.UID,
+			OperatorID:     hex.EncodeToString(operator.OperatorID[:]),
+			Parallelism:    operator.Parallelism,
+			MaxParallelism: operator.MaxParallelism,
+		})
+	}
+
+	metadataSummary := &StorageCheckpointMetadataSummary{
+		Version:        summary.Version,
+		CheckpointID:   summary.CheckpointID,
+		NumOperators:   summary.NumOperators,
+		Operators:      operators,
+		StateFilePaths: summary.StateFilePaths,
+	}
+
+	if summary.Properties != nil {
+		metadataSummary.Properties = &StorageCheckpointPropertiesSummary{
+			CheckpointType:  summary.Properties.CheckpointType,
+			SharingStrategy: summary.Properties.SharingStrategy,
+			Source:          summary.Properties.Source,
+		}
+	}
+
+	return metadataSummary
 }

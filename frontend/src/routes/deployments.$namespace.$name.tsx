@@ -47,7 +47,7 @@ function DeploymentOverviewComponent() {
   const getActiveKey = () => {
     const path = location.pathname;
     if (path.endsWith('/checkpoints')) return 'checkpoints';
-    if (path.endsWith('/storage')) return 'storage';
+    if (path.includes('/storage')) return 'storage';
     if (path.endsWith('/events')) return 'events';
     if (path.endsWith('/exceptions')) return 'exceptions';
     return 'details';

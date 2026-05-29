@@ -49,6 +49,7 @@ func main() {
 			}))
 			deploymentGroup.HandleWith(httpserver.With(internal.NewHandlerStorageCheckpoints, func(r *httpserver.Router, handler *internal.HandlerStorageCheckpoints) {
 				r.GET("/storage-checkpoints", httpserver.Bind(handler.GetStorageCheckpoints))
+				r.GET("/storage-checkpoints/:entryType/:jobId/:entryName/metadata", httpserver.Bind(handler.GetStorageCheckpointMetadata))
 			}))
 			deploymentGroup.HandleWith(httpserver.With(internal.NewHandlerEvents, func(r *httpserver.Router, handler *internal.HandlerEvents) {
 				r.GET("/events", httpserver.Bind(handler.GetEvents))

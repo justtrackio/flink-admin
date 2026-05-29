@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet, useLocation } from '@tanstack/react-router';
 import { Alert, Button, Card, Descriptions, Space, Spin, Table, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useStorageCheckpoints } from '../hooks/useStorageCheckpoints';
@@ -36,6 +36,21 @@ export const Route = createFileRoute('/deployments/$namespace/$name/storage')({
 
 function DeploymentStorageComponent() {
   const { namespace, name } = Route.useParams();
+  const location = useLocation();
+
+  if (!location.pathname.endsWith('/storage')) {
+    return <Outlet />;
+  }
+
+  return <DeploymentStorageList namespace={namespace} name={name} />;
+}
+
+interface DeploymentStorageListProps {
+  namespace: string;
+  name: string;
+}
+
+function DeploymentStorageList({ namespace, name }: DeploymentStorageListProps) {
   const storageCheckpoints = useStorageCheckpoints(namespace, name);
   const stateEntries = [...(storageCheckpoints.data?.stateEntries ?? [])].sort((a, b) => {
     const aTime = a.lastModified ? new Date(a.lastModified).getTime() : 0;
@@ -106,6 +121,20 @@ function DeploymentStorageComponent() {
                       dataIndex: 'name',
                       key: 'name',
                       width: 150,
+                      render: (entryName: string, record: StorageEntry) => (
+                        <Link
+                          to="/deployments/$namespace/$name/storage/$entryType/$jobId/$entryName"
+                          params={{
+                            namespace,
+                            name,
+                            entryType: record.type,
+                            jobId: record.jobId || '-',
+                            entryName,
+                          }}
+                        >
+                          {entryName}
+                        </Link>
+                      ),
                     },
                     {
                       title: 'Job ID',
