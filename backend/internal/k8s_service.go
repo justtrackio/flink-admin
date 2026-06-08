@@ -10,6 +10,7 @@ import (
 	"github.com/justtrackio/gosoline/pkg/log"
 	eventsv1 "k8s.io/api/events/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
@@ -98,12 +99,26 @@ func (s *K8sService) WatchDeployments(ctx context.Context) (watch.Interface, err
 	return deployments.Watch(ctx, metav1.ListOptions{})
 }
 
-func (s *K8sService) PatchDeploymentJobState(ctx context.Context, namespace string, name string, state string) error {
+func (s *K8sService) GetDeployment(ctx context.Context, namespace string, name string) (*FlinkDeployment, error) {
+	var err error
+	var object *unstructured.Unstructured
+	var deployment *FlinkDeployment
+
+	if object, err = s.dynamicClient.Resource(flinkDeploymentGVR()).Namespace(namespace).Get(ctx, name, metav1.GetOptions{}); err != nil {
+		return nil, fmt.Errorf("could not get deployment %s/%s: %w", namespace, name, err)
+	}
+
+	if deployment, err = FromUnstructured(object); err != nil {
+		return nil, fmt.Errorf("could not parse deployment %s/%s: %w", namespace, name, err)
+	}
+
+	return deployment, nil
+}
+
+func (s *K8sService) PatchDeploymentJobSpec(ctx context.Context, namespace string, name string, spec map[string]any) error {
 	patch, err := json.Marshal(map[string]any{
 		"spec": map[string]any{
-			"job": map[string]any{
-				"state": state,
-			},
+			"job": spec,
 		},
 	})
 	if err != nil {
@@ -112,7 +127,7 @@ func (s *K8sService) PatchDeploymentJobState(ctx context.Context, namespace stri
 
 	_, err = s.dynamicClient.Resource(flinkDeploymentGVR()).Namespace(namespace).Patch(ctx, name, k8stypes.MergePatchType, patch, metav1.PatchOptions{})
 	if err != nil {
-		return fmt.Errorf("could not patch deployment %s/%s job state to %s: %w", namespace, name, state, err)
+		return fmt.Errorf("could not patch deployment %s/%s job state to %s: %w", namespace, name, spec, err)
 	}
 
 	return nil

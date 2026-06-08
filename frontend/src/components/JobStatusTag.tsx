@@ -6,8 +6,8 @@ interface JobStatusTagProps {
 
 export function JobStatusTag({ status }: JobStatusTagProps) {
   const colorMap: Record<string, string> = {
-    RUNNING: 'processing',
-    FINISHED: 'success',
+    RUNNING: 'success',
+    FINISHED: 'cyan',
     CANCELED: 'default',
     CANCELING: 'warning',
     FAILED: 'error',

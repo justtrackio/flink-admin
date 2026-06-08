@@ -96,12 +96,14 @@ type FlinkDeploymentResource struct {
 }
 
 type FlinkDeploymentJob struct {
-	JarURI      string   `json:"jarURI,omitempty"`
-	EntryClass  string   `json:"entryClass,omitempty"`
-	Args        []string `json:"args,omitempty"`
-	Parallelism int      `json:"parallelism,omitempty"`
-	UpgradeMode string   `json:"upgradeMode,omitempty"`
-	State       string   `json:"state,omitempty"`
+	JarURI                 string   `json:"jarURI,omitempty"`
+	EntryClass             string   `json:"entryClass,omitempty"`
+	Args                   []string `json:"args,omitempty"`
+	Parallelism            int      `json:"parallelism,omitempty"`
+	UpgradeMode            string   `json:"upgradeMode,omitempty"`
+	State                  string   `json:"state,omitempty"`
+	InitialSavepointPath   string   `json:"initialSavepointPath,omitempty"`
+	SavepointRedeployNonce *int64   `json:"savepointRedeployNonce,omitempty"`
 }
 
 type FlinkDeploymentStatus struct {

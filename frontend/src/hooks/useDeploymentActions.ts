@@ -1,12 +1,13 @@
 import { useCallback, useState } from 'react';
 import { apiClient } from '../api/client';
-import type { UpdateDeploymentStateResponse } from '../api/schema';
+import type { RecoverDeploymentResponse, UpdateDeploymentStateResponse } from '../api/schema';
 
-type DeploymentAction = 'suspend' | 'resume';
+type DeploymentAction = 'suspend' | 'resume' | 'recover';
 
 interface DeploymentActionsState {
   suspendDeployment: () => Promise<UpdateDeploymentStateResponse>;
   resumeDeployment: () => Promise<UpdateDeploymentStateResponse>;
+  recoverDeployment: (initialSavepointPath: string) => Promise<RecoverDeploymentResponse>;
   isLoading: boolean;
   pendingAction: DeploymentAction | null;
   error: string | null;
@@ -51,9 +52,27 @@ export function useDeploymentActions(namespace: string, name: string): Deploymen
     return requestAction('resume');
   }, [requestAction]);
 
+  const recoverDeployment = useCallback(async (initialSavepointPath: string): Promise<RecoverDeploymentResponse> => {
+    setPendingAction('recover');
+    setError(null);
+
+    try {
+      return await apiClient.post<RecoverDeploymentResponse>(`/api/deployments/${namespace}/${name}/recover`, {
+        initialSavepointPath,
+      });
+    } catch (requestError) {
+      const message = getErrorMessage(requestError);
+      setError(message);
+      throw requestError;
+    } finally {
+      setPendingAction(null);
+    }
+  }, [name, namespace]);
+
   return {
     suspendDeployment,
     resumeDeployment,
+    recoverDeployment,
     isLoading: pendingAction !== null,
     pendingAction,
     error,

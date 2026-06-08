@@ -11,8 +11,11 @@ import (
 	"github.com/gosoline-project/httpserver"
 	"github.com/justtrackio/flink-admin/internal/checkpoint"
 	"github.com/justtrackio/gosoline/pkg/cfg"
+	"github.com/justtrackio/gosoline/pkg/coffin"
+	"github.com/justtrackio/gosoline/pkg/funk"
 	"github.com/justtrackio/gosoline/pkg/log"
 	"github.com/justtrackio/gosoline/pkg/mapx"
+	"github.com/marusama/semaphore/v2"
 )
 
 const (
@@ -239,19 +242,56 @@ func (h *HandlerStorageCheckpoints) GetStorageCheckpointMetadata(ctx context.Con
 func (h *HandlerStorageCheckpoints) populateCheckpoints(ctx context.Context, checkpointBaseDir string, response *StorageCheckpointsResponse) error {
 	var err error
 	var jobIds []string
-	var checkpoints []StateEntry
 
 	if jobIds, err = h.s3Service.ListJobDirectories(ctx, checkpointBaseDir); err != nil {
 		return err
 	}
 
 	h.logger.Info(ctx, "found %d job directories to scan", len(jobIds))
-	for _, jobId := range jobIds {
-		if checkpoints, err = h.s3Service.ListValidCheckpoints(ctx, checkpointBaseDir, jobId); err != nil {
-			return fmt.Errorf("failed to list checkpoints for job %s: %v", jobId, err)
-		}
 
-		response.StateEntries = append(response.StateEntries, checkpoints...)
+	sem := semaphore.New(25)
+	cfn := coffin.New()
+	checkpointsPerJob := make([][]StateEntry, len(jobIds))
+
+	for j, jobId := range jobIds {
+		cfn.GoWithContext(ctx, func(ctx context.Context) error {
+			if err = sem.Acquire(ctx, 1); err != nil {
+				return fmt.Errorf("failed to acquire semaphore: %w", err)
+			}
+			defer sem.Release(1)
+
+			if checkpointsPerJob[j], err = h.s3Service.ListValidCheckpoints(ctx, checkpointBaseDir, jobId); err != nil {
+				return fmt.Errorf("failed to list checkpoints for job %s: %w", jobId, err)
+			}
+
+			return nil
+		})
+	}
+
+	if err = cfn.Wait(); err != nil {
+		return fmt.Errorf("failed waiting for checkpoints: %w", err)
+	}
+
+	response.StateEntries = funk.Flatten(checkpointsPerJob)
+	cfn = coffin.New()
+
+	for c := range response.StateEntries {
+		cfn.GoWithContext(ctx, func(ctx context.Context) error {
+			if err = sem.Acquire(ctx, 1); err != nil {
+				return fmt.Errorf("failed to acquire semaphore: %w", err)
+			}
+			defer sem.Release(1)
+
+			if response.StateEntries[c].CheckpointId, err = h.getCheckpointId(ctx, response.StateEntries[c].Path); err != nil {
+				return fmt.Errorf("failed to get checkpoint id for %s: %w", response.StateEntries[c].Path, err)
+			}
+
+			return nil
+		})
+	}
+
+	if err = cfn.Wait(); err != nil {
+		return fmt.Errorf("failed waiting for checkpoints: %w", err)
 	}
 
 	return nil
@@ -261,6 +301,7 @@ func (h *HandlerStorageCheckpoints) populateSavepoints(ctx context.Context, save
 	var err error
 	var savepoints []StorageEntry
 	var metadataInfo *MetadataInfo
+	var checkpointId int64
 
 	h.logger.Info(ctx, "listing savepoints from %s", savepointDir)
 
@@ -277,17 +318,44 @@ func (h *HandlerStorageCheckpoints) populateSavepoints(ctx context.Context, save
 			continue
 		}
 
+		if checkpointId, err = h.getCheckpointId(ctx, savepoint.Path); err != nil {
+			return fmt.Errorf("failed to get checkpoint id for %s: %w", savepoint.Path, err)
+		}
+
 		response.StateEntries = append(response.StateEntries, StateEntry{
 			Type:         StateTypeSavepoint,
 			Name:         savepoint.Name,
 			Path:         savepoint.Path,
 			JobId:        "",
+			CheckpointId: checkpointId,
 			LastModified: metadataInfo.LastModified,
 			Size:         metadataInfo.Size,
 		})
 	}
 
 	return nil
+}
+
+func (h *HandlerStorageCheckpoints) getCheckpointId(ctx context.Context, statePath string) (int64, error) {
+	var err error
+	var metadataReader io.ReadCloser
+	var summary *checkpoint.CheckpointSummary
+
+	if metadataReader, err = h.s3Service.OpenMetadata(ctx, statePath); err != nil {
+		return 0, fmt.Errorf("failed to open metadata for %s: %w", statePath, err)
+	}
+
+	defer func() {
+		if cerr := metadataReader.Close(); cerr != nil {
+			h.logger.Warn(ctx, "failed to close metadata reader for %s: %v", statePath, cerr)
+		}
+	}()
+
+	if summary, err = checkpoint.ParseSummary(metadataReader, checkpoint.ParseOptions{}); err != nil {
+		return 0, fmt.Errorf("failed to parse metadata for %s: %w", statePath, err)
+	}
+
+	return summary.CheckpointID, nil
 }
 
 func validateStorageEntryRequest(request *GetStorageCheckpointMetadataRequest) error {

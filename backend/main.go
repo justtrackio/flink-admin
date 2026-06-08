@@ -44,8 +44,9 @@ func main() {
 				r.GET("/checkpoints", httpserver.Bind(handler.GetCheckpoints))
 			}))
 			deploymentGroup.HandleWith(httpserver.With(internal.NewHandlerDeploymentState, func(r *httpserver.Router, handler *internal.HandlerDeploymentState) {
-				r.POST("/suspend", httpserver.Bind(handler.SuspendDeployment))
-				r.POST("/resume", httpserver.Bind(handler.ResumeDeployment))
+				r.POST("/suspend", httpserver.Bind(handler.Suspend))
+				r.POST("/resume", httpserver.Bind(handler.Resume))
+				r.POST("/recover", httpserver.Bind(handler.Recover))
 			}))
 			deploymentGroup.HandleWith(httpserver.With(internal.NewHandlerStorageCheckpoints, func(r *httpserver.Router, handler *internal.HandlerStorageCheckpoints) {
 				r.GET("/storage-checkpoints", httpserver.Bind(handler.GetStorageCheckpoints))

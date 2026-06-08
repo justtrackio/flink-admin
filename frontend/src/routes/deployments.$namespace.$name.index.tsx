@@ -3,6 +3,56 @@ import { Descriptions, Table } from 'antd';
 import { useMemo } from 'react';
 import { useDeployment } from '../hooks/useDeployment';
 
+interface ConfigurationTableRow {
+  key: string;
+  configKey: string;
+  configValue: string;
+}
+
+function isConfigurationObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function formatConfigurationValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  return JSON.stringify(value) ?? '';
+}
+
+function flattenConfigurationEntries(
+  configuration: Record<string, unknown>,
+  prefix = ''
+): ConfigurationTableRow[] {
+  const rows: ConfigurationTableRow[] = [];
+
+  for (const [configKey, configValue] of Object.entries(configuration)) {
+    const nestedKey = prefix ? `${prefix}.${configKey}` : configKey;
+
+    if (isConfigurationObject(configValue)) {
+      rows.push(...flattenConfigurationEntries(configValue, nestedKey));
+      continue;
+    }
+
+    rows.push({
+      key: nestedKey,
+      configKey: nestedKey,
+      configValue: formatConfigurationValue(configValue),
+    });
+  }
+
+  return rows;
+}
+
 export const Route = createFileRoute('/deployments/$namespace/$name/')({
   component: DeploymentDetailsComponent,
 });
@@ -22,6 +72,12 @@ function DeploymentDetailsComponent() {
     return rows;
   }, [deployment?.spec.job.args]);
 
+  const flinkConfigurationTableData = useMemo(() => {
+    return flattenConfigurationEntries(deployment?.spec.flinkConfiguration ?? {}).sort((first, second) =>
+      first.configKey.localeCompare(second.configKey)
+    );
+  }, [deployment?.spec.flinkConfiguration]);
+
   if (!deployment) {
     return null; // Parent handles "not found"
   }
@@ -29,6 +85,7 @@ function DeploymentDetailsComponent() {
   const { spec } = deployment;
 
   const jobArgs = spec.job.args ?? [];
+  const hasFlinkConfiguration = flinkConfigurationTableData.length > 0;
 
   const jobArgsColumns = [
     {
@@ -41,6 +98,21 @@ function DeploymentDetailsComponent() {
       title: 'Value',
       dataIndex: 'argValue',
       key: 'argValue',
+      render: (value: string) => <code style={{ fontSize: '12px' }}>{value}</code>,
+    },
+  ];
+
+  const flinkConfigurationColumns = [
+    {
+      title: 'Key',
+      dataIndex: 'configKey',
+      key: 'configKey',
+      render: (value: string) => <code style={{ fontSize: '12px' }}>{value}</code>,
+    },
+    {
+      title: 'Value',
+      dataIndex: 'configValue',
+      key: 'configValue',
       render: (value: string) => <code style={{ fontSize: '12px' }}>{value}</code>,
     },
   ];
@@ -73,6 +145,16 @@ function DeploymentDetailsComponent() {
           <Table
             columns={jobArgsColumns}
             dataSource={jobArgsTableData}
+            pagination={false}
+            size="small"
+          />
+        </Descriptions.Item>
+      )}
+      {hasFlinkConfiguration && (
+        <Descriptions.Item label="Flink Configuration" span={2}>
+          <Table
+            columns={flinkConfigurationColumns}
+            dataSource={flinkConfigurationTableData}
             pagination={false}
             size="small"
           />

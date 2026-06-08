@@ -20,6 +20,8 @@ export interface FlinkDeploymentJob {
   parallelism: number;
   state: string;
   upgradeMode: string;
+  initialSavepointPath?: string;
+  savepointRedeployNonce?: number;
 }
 
 export interface FlinkDeploymentJobManager {
@@ -40,7 +42,7 @@ export interface FlinkDeploymentIngress {
 export interface FlinkDeploymentSpec {
   image: string;
   flinkVersion: string;
-  flinkConfiguration?: Record<string, string>;
+  flinkConfiguration?: Record<string, unknown>;
   ingress?: FlinkDeploymentIngress;
   job: FlinkDeploymentJob;
   jobManager: FlinkDeploymentJobManager;
@@ -91,6 +93,15 @@ export interface UpdateDeploymentStateResponse {
   namespace: string;
   name: string;
   state: string;
+  status: string;
+}
+
+export interface RecoverDeploymentResponse {
+  namespace: string;
+  name: string;
+  state: string;
+  initialSavepointPath: string;
+  savepointRedeployNonce: number;
   status: string;
 }
 
@@ -165,6 +176,7 @@ export interface StorageEntry {
   name: string;
   path: string;
   jobId?: string;
+  checkpointId?: number;
   lastModified?: string;
   size?: number;
 }

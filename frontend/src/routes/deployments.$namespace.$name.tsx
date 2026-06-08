@@ -170,15 +170,24 @@ function DeploymentOverviewComponent() {
             </div>
             <div style={{ flex: '1 1 560px', minWidth: '280px' }}>
               <Descriptions column={2} bordered size="small">
-                <Descriptions.Item label="Lifecycle State">
-                  {status?.lifecycleState ? (
-                    <DeploymentStatusTag status={status.lifecycleState} />
-                  ) : (
-                    <Tag>N/A</Tag>
-                  )}
+                <Descriptions.Item label="States">
+                  <Space size="small" wrap>
+                    <span>Lifecycle</span>
+                    {status?.lifecycleState ? (
+                      <DeploymentStatusTag status={status.lifecycleState} />
+                    ) : (
+                      <Tag>N/A</Tag>
+                    )}
+                    <span>Job</span>
+                    <JobStatusTag status={status?.jobStatus?.state} />
+                  </Space>
                 </Descriptions.Item>
-                <Descriptions.Item label="Job State">
-                  <JobStatusTag status={status?.jobStatus?.state} />
+                <Descriptions.Item label="Job ID">
+                  {status?.jobStatus?.jobId ? (
+                    <code style={{ fontSize: '12px' }}>{status.jobStatus.jobId}</code>
+                  ) : (
+                    'N/A'
+                  )}
                 </Descriptions.Item>
                 <Descriptions.Item label="Job Manager Status">
                   {status?.jobManagerDeploymentStatus || 'N/A'}
