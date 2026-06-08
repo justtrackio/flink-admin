@@ -48,7 +48,7 @@ type StateEntry struct {
 	Name         string     `json:"name"`
 	Path         string     `json:"path"`
 	JobId        string     `json:"jobId,omitempty"`
-	CheckpointId int64     `json:"checkpointId,omitempty"`
+	CheckpointId int64      `json:"checkpointId,omitempty"`
 	LastModified *time.Time `json:"lastModified,omitempty"`
 	Size         *int64     `json:"size,omitempty"`
 }
