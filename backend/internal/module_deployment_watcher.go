@@ -11,6 +11,7 @@ import (
 	"github.com/justtrackio/gosoline/pkg/kernel"
 	"github.com/justtrackio/gosoline/pkg/log"
 	"github.com/justtrackio/gosoline/pkg/uuid"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 type deploymentWatcherModuleCtxKey struct{}
@@ -146,7 +147,12 @@ func (m *DeploymentWatcherModule) applyEvent(ctx context.Context, event Deployme
 	if _, ok := m.deployments[fd.Namespace]; !ok {
 		m.deployments[fd.Namespace] = make(map[string]*FlinkDeployment)
 	}
-	m.deployments[fd.Namespace][fd.Name] = fd
+
+	if event.Type == watch.Deleted {
+		delete(m.deployments[fd.Namespace], fd.Name)
+	} else {
+		m.deployments[fd.Namespace][fd.Name] = fd
+	}
 
 	m.logger.Info(ctx, "got event from k8s watcher for %s", fd.Name)
 
