@@ -60,6 +60,10 @@ mise run ci:frontend-build
 # mise enter hook: keep codegraph index fresh
 enter = """
   command -v codegraph >/dev/null 2>&1 || exit 0
+  codegraph() {
+    mise --no-config exec aqua:colbymchenry/codegraph@1.6.3 -- codegraph "$@"
+  }
+
   if [ ! -f .codegraph/codegraph.db ]; then
     codegraph init -i
   fi
